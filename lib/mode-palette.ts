@@ -3,29 +3,29 @@ export type UIMode = 'normal' | 'focus' | 'deadline' | 'completed' | 'hacker';
 export const modePalettes = {
   normal: {
     name: 'Normal',
-    accent: 'oklch(0.70 0.20 264)',      // Bright cyan
-    primary: 'oklch(0.65 0.15 264)',     // Cyan-blue
-    secondary: 'oklch(0.55 0.15 280)',   // Purple-blue
+    accent: 'oklch(0.70 0.22 280)',      // Bright purple
+    primary: 'oklch(0.65 0.18 280)',     // Purple
+    secondary: 'oklch(0.55 0.15 270)',   // Deep purple
     background: 'oklch(0.08 0 0)',       // Deep black
-    card: 'oklch(0.12 0.01 264)',        // Dark blue-tinted
-    border: 'oklch(0.20 0.01 264)',      // Blue border
-    foreground: 'oklch(0.95 0.02 264)',  // Light text
-    glassTint: 'rgba(100, 200, 255, 0.1)',
-    glowColor: 'rgba(100, 200, 255, 0.4)',
-    gradient: 'linear-gradient(135deg, oklch(0.08 0 0) 0%, oklch(0.10 0.01 264) 50%, oklch(0.09 0.005 240) 100%)',
+    card: 'oklch(0.12 0.02 280)',        // Dark purple-tinted
+    border: 'oklch(0.20 0.02 280)',      // Purple border
+    foreground: 'oklch(0.95 0.02 280)',  // Light text
+    glassTint: 'rgba(168, 85, 247, 0.12)',
+    glowColor: 'rgba(168, 85, 247, 0.4)',
+    gradient: 'linear-gradient(135deg, oklch(0.08 0 0) 0%, oklch(0.10 0.015 280) 50%, oklch(0.09 0.008 270) 100%)',
   },
   focus: {
     name: 'Focus',
-    accent: 'oklch(0.75 0.22 264)',      // Intense cyan
-    primary: 'oklch(0.68 0.18 264)',     // Stronger cyan
-    secondary: 'oklch(0.58 0.16 280)',   // Stronger purple
+    accent: 'oklch(0.75 0.25 264)',      // Intense blue/cyan
+    primary: 'oklch(0.70 0.20 264)',     // Bright blue
+    secondary: 'oklch(0.60 0.16 260)',   // Deep blue
     background: 'oklch(0.06 0 0)',       // Almost black
-    card: 'oklch(0.09 0.005 264)',       // Darker card
-    border: 'oklch(0.18 0.01 264)',      // Darker border
+    card: 'oklch(0.09 0.01 264)',        // Darker blue-tinted card
+    border: 'oklch(0.18 0.01 264)',      // Blue border
     foreground: 'oklch(0.97 0.02 264)',  // Brighter text
-    glassTint: 'rgba(100, 220, 255, 0.08)',
-    glowColor: 'rgba(100, 220, 255, 0.5)',
-    gradient: 'linear-gradient(135deg, oklch(0.06 0 0) 0%, oklch(0.08 0.005 264) 50%, oklch(0.07 0 0) 100%)',
+    glassTint: 'rgba(100, 200, 255, 0.1)',
+    glowColor: 'rgba(100, 200, 255, 0.5)',
+    gradient: 'linear-gradient(135deg, oklch(0.06 0 0) 0%, oklch(0.08 0.008 264) 50%, oklch(0.07 0 0) 100%)',
   },
   deadline: {
     name: 'Deadline',
