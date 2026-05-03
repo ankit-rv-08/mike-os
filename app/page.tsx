@@ -202,25 +202,26 @@ export default function Dashboard() {
           {dailySummary.map((item) => (
             <div key={item.label} className="glass-panel p-6 hover-glow">
               <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                {item.label}
-              </h3>
-              <Activity className="w-5 h-5 text-accent" />
-            </div>
-            <div className="space-y-3 mb-4">
-              <div>
-                <p className="text-2xl font-bold text-foreground">{item.completed}</p>
-                <p className="text-xs text-muted-foreground">of {item.value}</p>
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  {item.label}
+                </h3>
+                <Activity className="w-5 h-5 text-accent" />
+              </div>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{item.completed}</p>
+                  <p className="text-xs text-muted-foreground">of {item.value}</p>
+                </div>
+              </div>
+              <div className="w-full h-3 bg-card/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-accent to-primary transition-all duration-500"
+                  style={{ width: `${(item.completed / item.value) * 100}%` }}
+                />
               </div>
             </div>
-            <div className="w-full h-3 bg-card/50 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-accent to-primary transition-all duration-500"
-                style={{ width: `${(item.completed / item.value) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Productivity Trends & Identity Building */}
