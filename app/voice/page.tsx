@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mic2, StopCircle, Volume2, Waveform } from 'lucide-react';
+import { Mic2, StopCircle, Volume2, Radio } from 'lucide-react';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -171,7 +171,7 @@ export default function VoicePage() {
       {/* Voice Commands Suggestions */}
       <div className="mt-16 glass-panel p-8 w-full border border-border/30">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <Waveform className="w-5 h-5 text-accent" />
+          <Radio className="w-5 h-5 text-accent" />
           <h3 className="font-semibold text-foreground text-lg">Try Voice Commands</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-6 text-center">
