@@ -39,11 +39,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background dark">
-      <body className="font-sans antialiased bg-background text-foreground">
+      <body className="font-sans antialiased bg-background text-foreground transition-colors duration-500">
         <ModeProvider>
           <Sidebar />
           <TopBar />
-          <main className="ml-72 mt-20 p-8 min-h-screen">
+          <main className="ml-72 mt-20 p-8 min-h-screen transition-all duration-500">
             {children}
           </main>
           {process.env.NODE_ENV === 'production' && <Analytics />}

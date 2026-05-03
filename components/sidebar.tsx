@@ -30,15 +30,15 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-72 glass-panel-lg border-r border-border/30 p-6 flex flex-col gap-12 z-50">
+    <aside className="fixed left-0 top-0 h-screen w-72 glass-panel-lg border-r border-border/30 p-6 flex flex-col gap-12 z-50 transition-all duration-500">
       {/* Logo */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent via-primary to-accent flex items-center justify-center">
+      <div className="flex items-center gap-3 transition-all duration-300">
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent via-primary to-accent flex items-center justify-center transition-all duration-300 hover:scale-110">
           <span className="text-xl font-bold text-background">M</span>
         </div>
         <div>
-          <h1 className="text-lg font-bold text-glow">MIKE OS</h1>
-          <p className="text-xs text-muted-foreground">v1.0</p>
+          <h1 className="text-lg font-bold text-glow transition-all duration-300">MIKE OS</h1>
+          <p className="text-xs text-muted-foreground transition-all duration-300">v1.0</p>
         </div>
       </div>
 
@@ -53,15 +53,15 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={`
-                flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-300
+                flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-500 transform
                 ${
                   isActive
-                    ? 'bg-accent/20 text-accent neon-glow border border-accent/50'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-card/50 border border-transparent hover:neon-glow'
+                    ? 'bg-accent/20 text-accent neon-glow border border-accent/50 scale-105'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card/50 border border-transparent hover:neon-glow hover:scale-102'
                 }
               `}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
+              <Icon className={`w-5 h-5 flex-shrink-0 transition-all duration-300 ${isActive ? 'animate-float' : ''}`} />
               <span className="text-sm font-medium">{item.label}</span>
             </Link>
           );
@@ -69,7 +69,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer info */}
-      <div className="border-t border-border/30 pt-4 space-y-2">
+      <div className="border-t border-border/30 pt-4 space-y-2 transition-all duration-300">
         <p className="text-xs text-muted-foreground">Status</p>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
