@@ -5,27 +5,22 @@ const { routeCommand } = require("../agents/command-router");
 
 router.post("/command", async (req, res) => {
   try {
-    const { input, source } = req.body;
+    const { input } = req.body;
 
     if (!input) {
-      return res.status(400).json({
-        ok: false,
-        error: "No input provided",
-      });
+      return res.status(400).json({ error: "No input" });
     }
 
     const result = await routeCommand(input);
 
-    res.json({
+    return res.json({
       ok: true,
       result,
     });
   } catch (err) {
-    console.error("Command error:", err);
-
+    console.error(err);
     res.status(500).json({
-      ok: false,
-      error: "Command execution failed",
+      error: "Command failed",
     });
   }
 });
