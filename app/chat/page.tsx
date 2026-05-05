@@ -36,7 +36,7 @@ export default function ChatPage() {
 
     const userText = input.trim();
 
-    setMessages((prev) => [
+    setMessages((prev: Message[]) => [
       ...prev,
       {
         id: Date.now().toString(),
@@ -63,7 +63,7 @@ export default function ChatPage() {
         data?.message ||
         'Command executed.';
 
-      setMessages((prev) => [
+      setMessages((prev: Message[]) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
@@ -72,7 +72,7 @@ export default function ChatPage() {
         },
       ]);
     } catch (err) {
-      setMessages((prev) => [
+      setMessages((prev: Message[]) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
@@ -97,7 +97,7 @@ export default function ChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 mb-6">
-        {messages.map((msg) => (
+        {messages.map((msg: Message) => (
           <div
             key={msg.id}
             className={`flex ${
@@ -118,7 +118,7 @@ export default function ChatPage() {
       <form onSubmit={handleSendMessage} className="flex gap-2">
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
           className="flex-1 p-3 rounded bg-gray-900 text-white"
           placeholder="Type command..."
         />

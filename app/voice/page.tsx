@@ -149,7 +149,9 @@ export default function VoicePage() {
       };
 
       recognition.onend = () => {
-        if (state === 'listening') setState('processing');
+        setState((currentState: VoiceState) => 
+          currentState === 'listening' ? 'processing' : currentState
+        );
       };
 
       recognition.start();
