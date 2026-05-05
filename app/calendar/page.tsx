@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Clock, AlertCircle } from 'lucide-react';
 
 const getDaysInMonth = (date: Date) => {
@@ -19,37 +19,60 @@ interface DayEvent {
   completion?: number;
 }
 
-const dayEvents: Record<number, DayEvent[]> = {
-  15: [
-    { time: '9:00 AM', title: 'Team Standup', type: 'meeting' },
-    { time: '11:00 AM', title: 'Review PR #1234', type: 'task', completion: 60 },
-    { time: '2:00 PM', title: 'Client Call', type: 'meeting' },
-  ],
-  16: [
-    { time: '10:00 AM', title: 'Design Review', type: 'meeting' },
-    { time: '3:00 PM', title: 'Project Planning', type: 'task', completion: 30 },
-  ],
-  20: [
-    { time: '9:30 AM', title: 'Presentation', type: 'meeting' },
-    { time: '4:00 PM', title: 'Finish report', type: 'task', completion: 100, completed: true },
-  ],
-};
-
 export default function CalendarPage() {
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(16);
+  const [dayEvents, setDayEvents] = useState<Record<number, DayEvent[]>>({});
+  const [completionMap, setCompletionMap] = useState<Record<number, number>>({});
 
   const daysInMonth = getDaysInMonth(currentDate);
   const firstDay = getFirstDayOfMonth(currentDate);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: firstDay }, (_, i) => i);
 
-  const getCompletionPercentage = (day: number) => {
-    const events = dayEvents[day] || [];
-    if (events.length === 0) return 0;
-    const completed = events.filter((e) => e.completed).length;
-    return Math.round((completed / events.length) * 100);
-  };
+  const currentMonth = useMemo(
+    () =>
+      `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
+    [currentDate]
+  );
+
+  useEffect(() => {
+    const loadCalendar = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/calendar?month=${currentMonth}`);
+        const json = await res.json();
+        const days = json?.data?.days || json?.result?.data?.days || [];
+        const eventMap: Record<number, DayEvent[]> = {};
+        const progressMap: Record<number, number> = {};
+
+        for (const dayEntry of days) {
+          const day = Number(dayEntry.day);
+          progressMap[day] = dayEntry.completion || 0;
+          eventMap[day] = (dayEntry.events || []).map((ev: any) => ({
+            time: new Date(ev.start_time).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            }),
+            title: ev.title,
+            type: ev.event_type === 'task' ? 'task' : ev.event_type === 'meeting' ? 'meeting' : 'reminder',
+            completed: ev.completed,
+            completion: dayEntry.completion || 0,
+          }));
+        }
+
+        setDayEvents(eventMap);
+        setCompletionMap(progressMap);
+      } catch (_error) {
+        setDayEvents({});
+        setCompletionMap({});
+      }
+    };
+
+    void loadCalendar();
+  }, [API_BASE, currentMonth]);
+
+  const getCompletionPercentage = (day: number) => completionMap[day] ?? 0;
 
   const getDayColor = (day: number) => {
     const percentage = getCompletionPercentage(day);

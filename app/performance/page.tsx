@@ -2,7 +2,7 @@
 
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Activity, Flame, Droplet, Moon, Utensils, Dumbbell, Heart, TrendingUp, Check, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Body metrics data
 const bodyMetrics = [
@@ -85,9 +85,64 @@ const streaks = [
 ];
 
 export default function PerformancePage() {
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
   const [selectedWeek] = useState(14);
+  const [liveWeeklyData, setLiveWeeklyData] = useState(weeklyData);
+  const [liveLifeScore, setLiveLifeScore] = useState<{ overall: number } | null>(null);
+  const [liveToday, setLiveToday] = useState<any>(null);
   const completedHabits = dailyHabits.filter(h => h.completed).length;
   const habitsTotal = dailyHabits.length;
+
+  useEffect(() => {
+    const loadPerformance = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/performance`);
+        const json = await res.json();
+        const payload = json?.data || json?.result?.data || {};
+        const trend = payload?.trend || [];
+        const today = payload?.today || {};
+        const lifeScore = payload?.lifeScore || null;
+
+        if (trend.length) {
+          const mapped = trend.map((row: any, idx: number) => ({
+            day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][idx % 7],
+            water: row.water_liters ?? 0,
+            sleep: row.sleep_hours ?? 0,
+            calories: 0,
+            active: Math.max(0, Math.round((row.steps ?? 0) / 200)),
+            steps: row.steps ?? 0,
+          }));
+          setLiveWeeklyData(mapped);
+        }
+
+        setLiveToday(today);
+        setLiveLifeScore(lifeScore);
+      } catch (_error) {
+        setLiveToday(null);
+        setLiveLifeScore(null);
+      }
+    };
+
+    void loadPerformance();
+  }, [API_BASE]);
+
+  const resolvedDailyGoals = useMemo(
+    () => [
+      {
+        ...dailyGoals[0],
+        current: liveToday?.water_liters ?? dailyGoals[0].current,
+      },
+      {
+        ...dailyGoals[1],
+        current: liveToday?.sleep_hours ?? dailyGoals[1].current,
+      },
+      {
+        ...dailyGoals[2],
+        current: liveToday?.calories ?? dailyGoals[2].current,
+      },
+    ],
+    [liveToday]
+  );
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -137,7 +192,7 @@ export default function PerformancePage() {
       <div className="space-y-3 mb-8">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Daily Goals</h2>
         <div className="glass-panel-lg p-8 space-y-6">
-          {dailyGoals.map((goal, idx) => {
+          {resolvedDailyGoals.map((goal, idx) => {
             const Icon = goal.icon;
             const percentage = (goal.current / goal.target) * 100;
             return (
@@ -196,7 +251,7 @@ export default function PerformancePage() {
           <div className="glass-panel p-8 hover-glow">
             <h3 className="font-semibold text-foreground mb-6">Sleep & Hydration</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={weeklyData}>
+              <BarChart data={liveWeeklyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 200, 255, 0.1)" />
                 <XAxis dataKey="day" stroke="rgb(100, 150, 200)" />
                 <YAxis stroke="rgb(100, 150, 200)" />
@@ -210,7 +265,7 @@ export default function PerformancePage() {
           <div className="glass-panel p-8 hover-glow">
             <h3 className="font-semibold text-foreground mb-6">Activity & Calories</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={weeklyData}>
+              <BarChart data={liveWeeklyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 200, 255, 0.1)" />
                 <XAxis dataKey="day" stroke="rgb(100, 150, 200)" />
                 <YAxis stroke="rgb(100, 150, 200)" />
@@ -297,6 +352,11 @@ export default function PerformancePage() {
               AI Performance Insight
             </h3>
             <div className="space-y-2 text-sm text-muted-foreground">
+              {liveLifeScore && (
+                <p>
+                  ✓ Current Life Score: <span className="text-accent font-semibold">{liveLifeScore.overall}</span>
+                </p>
+              )}
               <p>✓ You are on track with hydration but need better sleep consistency. Aim for 8+ hours daily.</p>
               <p>✓ Gym performance is improving. Maintain current strength progression and add 2-3kg weekly.</p>
               <p>⚠ Body fat needs attention. Increase daily steps and maintain calorie deficit of 300-400kcal.</p>

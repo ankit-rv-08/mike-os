@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:backend": "node backend/server.js",
+    "dev:full": "concurrently \"npm run dev\" \"npm run dev:backend\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
@@ -43,8 +45,13 @@
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "4.1.0",
+    "dotenv": "^17.2.3",
     "embla-carousel-react": "8.6.0",
+    "express": "^5.1.0",
     "input-otp": "1.4.2",
+    "cors": "^2.8.5",
+    "better-sqlite3": "^12.4.1",
+    "open": "^10.2.0",
     "lucide-react": "^0.564.0",
     "next": "16.2.4",
     "next-themes": "^0.4.6",
@@ -60,6 +67,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "^19",

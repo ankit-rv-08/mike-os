@@ -2,7 +2,7 @@
 
 import { Calendar, AlertCircle, TrendingUp, Zap, Activity, Flame, Heart, Brain, Target, CheckCircle2, Lock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Daily Briefing Data
 const dailyBriefing = {
@@ -60,9 +60,58 @@ const upcomingEvents = [
 ];
 
 export default function Dashboard() {
-  const [completedToday] = useState(8);
-  const totalTasks = 12;
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
+  const [completedToday, setCompletedToday] = useState(8);
+  const [totalTasks, setTotalTasks] = useState(12);
+  const [liveBriefing, setLiveBriefing] = useState<any>(null);
+  const [liveLifeScores, setLiveLifeScores] = useState<{ overall: number; mind: number; body: number; work: number; discipline: number } | null>(null);
+  const [liveEvents, setLiveEvents] = useState(upcomingEvents);
   const completionPercentage = Math.round((completedToday / totalTasks) * 100);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        const [tasksRes, briefingRes, perfRes, calendarRes] = await Promise.all([
+          fetch(`${API_BASE}/api/tasks`),
+          fetch(`${API_BASE}/api/briefing`),
+          fetch(`${API_BASE}/api/performance`),
+          fetch(`${API_BASE}/api/calendar`),
+        ]);
+
+        const tasksJson = await tasksRes.json();
+        const briefingJson = await briefingRes.json();
+        const perfJson = await perfRes.json();
+        const calendarJson = await calendarRes.json();
+
+        const tasks = tasksJson?.data?.tasks || tasksJson?.result?.data?.tasks || [];
+        const done = tasks.filter((task: any) => task.status === 'completed').length;
+        setTotalTasks(Math.max(1, tasks.length));
+        setCompletedToday(done);
+
+        const briefing = briefingJson?.briefing || briefingJson?.data?.briefing;
+        if (briefing) setLiveBriefing(briefing);
+
+        const life = perfJson?.data?.lifeScore || perfJson?.result?.data?.lifeScore;
+        if (life) setLiveLifeScores(life);
+
+        const calendarDays = calendarJson?.data?.days || calendarJson?.result?.data?.days || [];
+        const flattened = calendarDays.flatMap((d: any) => d.events || []).slice(0, 3);
+        if (flattened.length) {
+          setLiveEvents(
+            flattened.map((ev: any) => ({
+              time: new Date(ev.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+              title: ev.title,
+              type: ev.event_type || 'meeting',
+            }))
+          );
+        }
+      } catch (_error) {
+        // Keep existing static UI fallbacks when backend is unavailable.
+      }
+    };
+
+    void loadDashboardData();
+  }, [API_BASE]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -81,7 +130,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Pending Tasks</p>
-              <p className="text-2xl font-bold text-foreground">{dailyBriefing.pendingTasks} tasks <span className="text-sm text-accent">Need attention</span></p>
+              <p className="text-2xl font-bold text-foreground">{liveBriefing?.summary?.tasksDue ?? dailyBriefing.pendingTasks} tasks <span className="text-sm text-accent">Need attention</span></p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Peak Focus Time</p>
@@ -107,7 +156,7 @@ export default function Dashboard() {
                   fill="none"
                   stroke="url(#gradient)"
                   strokeWidth="6"
-                  strokeDasharray={`${(lifeScores.overall / 100) * 283} 283`}
+                  strokeDasharray={`${((liveLifeScores?.overall ?? lifeScores.overall) / 100) * 283} 283`}
                   className="transition-all duration-1000"
                   strokeLinecap="round"
                 />
@@ -119,7 +168,7 @@ export default function Dashboard() {
                 </defs>
               </svg>
               <div className="absolute text-center">
-                <div className="text-4xl font-bold text-accent">{lifeScores.overall}</div>
+                <div className="text-4xl font-bold text-accent">{liveLifeScores?.overall ?? lifeScores.overall}</div>
                 <div className="text-xs text-muted-foreground">/ 100</div>
               </div>
             </div>
@@ -132,10 +181,10 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-6">Score Breakdown</h3>
           <div className="space-y-5">
             {[
-              { label: 'Mind', value: lifeScores.mind, icon: Brain, color: 'from-blue-400 to-cyan-400' },
-              { label: 'Body', value: lifeScores.body, icon: Heart, color: 'from-green-400 to-emerald-400' },
-              { label: 'Work', value: lifeScores.work, icon: Target, color: 'from-purple-400 to-pink-400' },
-              { label: 'Discipline', value: lifeScores.discipline, icon: Flame, color: 'from-orange-400 to-red-400' },
+              { label: 'Mind', value: liveLifeScores?.mind ?? lifeScores.mind, icon: Brain, color: 'from-blue-400 to-cyan-400' },
+              { label: 'Body', value: liveLifeScores?.body ?? lifeScores.body, icon: Heart, color: 'from-green-400 to-emerald-400' },
+              { label: 'Work', value: liveLifeScores?.work ?? lifeScores.work, icon: Target, color: 'from-purple-400 to-pink-400' },
+              { label: 'Discipline', value: liveLifeScores?.discipline ?? lifeScores.discipline, icon: Flame, color: 'from-orange-400 to-red-400' },
             ].map((item, idx) => {
               const Icon = item.icon;
               return (
@@ -311,7 +360,7 @@ export default function Dashboard() {
           Today&apos;s Schedule
         </h2>
         <div className="space-y-3">
-          {upcomingEvents.map((event, idx) => (
+          {liveEvents.map((event, idx) => (
             <div
               key={idx}
               className="flex items-center justify-between p-4 bg-card/40 border border-border/30 rounded-lg hover:border-accent/50 hover:bg-card/60 transition-all transform hover:scale-102 cursor-pointer group"

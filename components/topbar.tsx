@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Settings } from 'lucide-react';
 import { useMode, type UIMode } from '@/lib/mode-context';
 
@@ -16,17 +16,17 @@ export function TopBar() {
   const { mode, setMode } = useMode();
   const [commandOpen, setCommandOpen] = useState(false);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      setCommandOpen(!commandOpen);
-    }
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandOpen((prev) => !prev);
+      }
+    };
 
-  // Listen for Ctrl+K
-  if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', handleKeyDown as any);
-  }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <header className="fixed top-0 left-72 right-0 h-20 glass-panel border-b border-border/30 flex items-center justify-between px-8 z-40 transition-all duration-500">

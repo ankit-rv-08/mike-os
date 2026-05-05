@@ -13,11 +13,42 @@ interface ModeContextType {
 const ModeContext = createContext<ModeContextType | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
   const [mode, setMode] = useState<UIMode>('normal');
 
   useEffect(() => {
+    const loadMode = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/mode`);
+        const data = await res.json();
+        if (data?.mode) {
+          setMode(data.mode as UIMode);
+        }
+      } catch (_error) {
+        // Keep local default when backend is unavailable.
+      }
+    };
+
+    void loadMode();
+  }, [API_BASE]);
+
+  useEffect(() => {
     applyModePalette(mode);
-  }, [mode]);
+
+    const persistMode = async () => {
+      try {
+        await fetch(`${API_BASE}/api/mode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode }),
+        });
+      } catch (_error) {
+        // Ignore persistence failures to keep UI responsive.
+      }
+    };
+
+    void persistMode();
+  }, [mode, API_BASE]);
 
   return (
     <ModeContext.Provider value={{ mode, setMode }}>

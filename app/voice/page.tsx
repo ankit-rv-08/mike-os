@@ -1,39 +1,179 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Mic2, StopCircle, Volume2, Radio } from 'lucide-react';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export default function VoicePage() {
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
   const [state, setState] = useState<VoiceState>('idle');
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
+  const [error, setError] = useState('');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState('');
+
+  const SpeechRecognitionApi = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
+  }, []);
+
+  const pickBritishMaleVoice = () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    const british = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'));
+    if (!british.length) return null;
+    if (selectedVoiceName) {
+      const selected = british.find((voice) => voice.name === selectedVoiceName);
+      if (selected) return selected;
+    }
+    const maleHint = british.find((voice) =>
+      /male|daniel|george|arthur|ryan|oliver/i.test(voice.name)
+    );
+    return maleHint || british[0];
+  };
+
+  const loadVoices = async () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const voices = window.speechSynthesis
+      .getVoices()
+      .filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'));
+    setAvailableVoices(voices);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/voice-settings`);
+      const json = await res.json();
+      const saved = json?.voiceName || '';
+      if (saved && voices.some((voice) => voice.name === saved)) {
+        setSelectedVoiceName(saved);
+      } else if (voices.length) {
+        setSelectedVoiceName(voices[0].name);
+      }
+    } catch (_error) {
+      if (voices.length) setSelectedVoiceName(voices[0].name);
+    }
+  };
+
+  const persistVoiceSettings = async (voiceName: string) => {
+    try {
+      await fetch(`${API_BASE}/api/voice-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voiceName,
+          locale: 'en-GB',
+          style: 'british-male',
+        }),
+      });
+    } catch (_error) {
+      // Keep local selection even if persistence fails.
+    }
+  };
+
+  const speakResponse = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !text) {
+      setState('idle');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-GB';
+    utterance.pitch = 0.95;
+    utterance.rate = 0.95;
+    const voice = pickBritishMaleVoice();
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = () => setState('idle');
+    utterance.onerror = () => {
+      setError('Text-to-speech failed. Please check browser voice permissions.');
+      setState('idle');
+    };
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const processCommand = async (input: string) => {
+    setState('processing');
+    try {
+      const res = await fetch(`${API_BASE}/api/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, source: 'voice' }),
+      });
+      const data = await res.json();
+      const reply =
+        data?.result?.message || data?.response || data?.message || 'Command received.';
+      setResponse(reply);
+      setState('speaking');
+      speakResponse(reply);
+    } catch (_err) {
+      setResponse('I could not reach the backend service right now.');
+      setState('speaking');
+      speakResponse('I could not reach the backend service right now.');
+    }
+  };
 
   const handleMicClick = () => {
     if (state === 'idle') {
+      setError('');
       setState('listening');
       setTranscript('');
       setResponse('');
-      // Simulate listening
-      setTimeout(() => {
-        setState('processing');
-        setTranscript('What is the weather in New York tomorrow?');
-        // Simulate processing and speaking
-        setTimeout(() => {
-          setState('speaking');
-          setResponse('The weather in New York tomorrow will be partly cloudy with a high of 72°F and a low of 58°F. There\'s a 20% chance of rain in the evening.');
-          setTimeout(() => {
-            setState('idle');
-          }, 4000);
-        }, 1500);
-      }, 2000);
+
+      if (!SpeechRecognitionApi) {
+        setError('Speech recognition is not supported in this browser.');
+        setState('idle');
+        return;
+      }
+
+      const recognition = new SpeechRecognitionApi();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event: any) => {
+        const spokenText = event.results?.[0]?.[0]?.transcript?.trim() || '';
+        if (!spokenText) {
+          setError('No speech detected. Please try again.');
+          setState('idle');
+          return;
+        }
+        setTranscript(spokenText);
+        void processCommand(spokenText);
+      };
+
+      recognition.onerror = () => {
+        setError('Microphone input failed. Please allow microphone access.');
+        setState('idle');
+      };
+
+      recognition.onend = () => {
+        if (state === 'listening') setState('processing');
+      };
+
+      recognition.start();
     } else {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setState('idle');
       setTranscript('');
       setResponse('');
     }
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const handleVoices = () => {
+      void loadVoices();
+    };
+    window.speechSynthesis.onvoiceschanged = handleVoices;
+    void loadVoices();
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] max-w-3xl mx-auto">
@@ -46,6 +186,7 @@ export default function VoicePage() {
           {state === 'processing' && 'Processing your request...'}
           {state === 'speaking' && 'Responding...'}
         </p>
+        {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
       </div>
 
       {/* Central Siri-style Orb with Animated Rings */}
@@ -169,6 +310,30 @@ export default function VoicePage() {
       </div>
 
       {/* Voice Commands Suggestions */}
+      <div className="mt-8 glass-panel p-5 w-full border border-border/30">
+        <div className="flex items-center gap-2 mb-3">
+          <Volume2 className="w-4 h-4 text-accent" />
+          <p className="text-sm font-semibold text-foreground">Voice Output</p>
+        </div>
+        <label className="text-xs text-muted-foreground block mb-2">British Voice (Male Preferred)</label>
+        <select
+          className="w-full bg-card/40 border border-border/30 rounded-lg px-3 py-2 text-sm text-foreground"
+          value={selectedVoiceName}
+          onChange={(event) => {
+            const voiceName = event.target.value;
+            setSelectedVoiceName(voiceName);
+            void persistVoiceSettings(voiceName);
+          }}
+        >
+          {availableVoices.length === 0 && <option value="">No UK voices found on this device</option>}
+          {availableVoices.map((voice) => (
+            <option key={voice.name} value={voice.name}>
+              {voice.name} ({voice.lang})
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="mt-16 glass-panel p-8 w-full border border-border/30">
         <div className="flex items-center justify-center gap-2 mb-4">
           <Radio className="w-5 h-5 text-accent" />
