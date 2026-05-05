@@ -1,15 +1,8 @@
-const { db } = require("../db");
+const db = require("../db");
 
 module.exports = async function createTask(title) {
-  if (!title) {
-    return { message: "Task title missing." };
-  }
+  const stmt = db.prepare("INSERT INTO tasks (title) VALUES (?)");
+  const result = stmt.run(title);
 
-  db.prepare(
-    "INSERT INTO tasks (title, completed) VALUES (?, 0)"
-  ).run(title);
-
-  return {
-    message: `✅ Task created: ${title}`,
-  };
+  return { id: result.lastInsertRowid, title };
 };
