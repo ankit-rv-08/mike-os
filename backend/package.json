@@ -1,17 +1,9 @@
 {
   "name": "mike-os-backend",
-  "private": true,
   "version": "1.0.0",
   "main": "server.js",
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.4.1",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "open": "^10.2.0",
-    "zod": "^3.24.1"
+  "scripts": {
+    "build": "echo 'no build needed'",
+    "start": "node server.js"
   }
 }
