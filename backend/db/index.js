@@ -1,9 +1,24 @@
-const Database = require("better-sqlite3");
-const path = require("path");
+const tasks = [];
 
-const db = new Database(path.resolve(__dirname, "database.db"));
+module.exports = {
+  prepare: (query) => {
+    return {
+      run: (title) => {
+        const task = {
+          id: tasks.length + 1,
+          title,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        };
 
-// optional safety
-db.pragma("journal_mode = WAL");
+        tasks.push(task);
 
-module.exports = db;
+        return {
+          lastInsertRowid: task.id,
+        };
+      },
+    };
+  },
+
+  _tasks: tasks,
+};
