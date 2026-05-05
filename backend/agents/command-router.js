@@ -1,25 +1,24 @@
-const commands = {
-  create_task: require("../commands/create-task"),
-  complete_task: require("../commands/complete-task"),
-  get_tasks: require("../commands/get-tasks"),
-  create_event: require("../commands/create-event"),
-  get_calendar: require("../commands/get-calendar"),
-  get_performance: require("../commands/get-performance"),
-  fetch_news: require("../commands/fetch-news"),
-  fetch_crypto: require("../commands/fetch-crypto"),
-  open_app: require("../commands/open-app"),
-};
+const createTask = require("../commands/create-task");
+const getTasks = require("../commands/get-tasks");
 
-async function routeCommand({ action, parameters, context }) {
-  const cmd = commands[action];
-  if (!cmd) throw new Error(`Unknown action: ${action}`);
+async function routeCommand(input) {
+  const text = input.toLowerCase();
 
-  if (cmd.validate) {
-    const result = cmd.validate(parameters || {});
-    if (!result.valid) throw new Error(`Validation failed: ${result.errors.join(", ")}`);
+  // CREATE TASK
+  if (text.startsWith("create task")) {
+    const title = input.replace(/create task/i, "").trim();
+
+    return await createTask(title);
   }
 
-  return cmd.execute({ params: parameters || {}, context });
+  // SHOW TASKS
+  if (text.includes("show tasks") || text.includes("get tasks")) {
+    return await getTasks();
+  }
+
+  return {
+    message: `I understand: "${input}" but no command matched.`,
+  };
 }
 
 module.exports = { routeCommand };
