@@ -1,8 +1,19 @@
-module.exports = async function createTask(input) {
-  const task = input.replace(/create task/i, "").trim();
+const db = require("../db");
 
-  // TEMP: no DB (Vercel-safe)
+function createTask(input) {
+  const title = input.replace("create task", "").trim();
+
+  const stmt = db.prepare(`
+    INSERT INTO tasks (title, status)
+    VALUES (?, 'pending')
+  `);
+
+  const result = stmt.run(title);
+
   return {
-    message: `Task created: ${task}`,
+    message: `Task created: ${title}`,
+    taskId: result.lastInsertRowid,
   };
-};
+}
+
+module.exports = createTask;

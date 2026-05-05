@@ -1,15 +1,9 @@
 const Database = require("better-sqlite3");
-const fs = require("fs");
+const path = require("path");
 
-const db = new Database("/tmp/mike-os.db");
+const db = new Database(path.resolve(__dirname, "database.db"));
 
-function initDb() {
-  const schema = fs.readFileSync(
-    __dirname + "/schema.sql",
-    "utf-8"
-  );
+// optional safety
+db.pragma("journal_mode = WAL");
 
-  db.exec(schema);
-}
-
-module.exports = { db, initDb };
+module.exports = db;
