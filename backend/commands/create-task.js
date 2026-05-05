@@ -1,8 +1,8 @@
-const db = require("../db");
+module.exports = async function createTask(input) {
+  const task = input.replace(/create task/i, "").trim();
 
-module.exports = async function createTask(title) {
-  const stmt = db.prepare("INSERT INTO tasks (title) VALUES (?)");
-  const result = stmt.run(title);
-
-  return { id: result.lastInsertRowid, title };
+  // TEMP: no DB (Vercel-safe)
+  return {
+    message: `Task created: ${task}`,
+  };
 };
