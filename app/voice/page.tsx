@@ -1,9 +1,29 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Mic2, StopCircle, Volume2, Radio } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Mic2, StopCircle, Volume2, Radio, ChevronDown, Check } from 'lucide-react';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
+type AccentStyle = 'british-male' | 'british-female' | 'american-male' | 'american-female' | 'indian-british' | 'european-male';
+
+interface VoiceOption {
+  id: AccentStyle;
+  name: string;
+  accent: string;
+  description: string;
+  lang: string;
+  pitch: number;
+  rate: number;
+}
+
+const VOICE_OPTIONS: VoiceOption[] = [
+  { id: 'british-male', name: 'British Male', accent: '🇬🇧', description: 'James - Clear & Sophisticated', lang: 'en-GB', pitch: 1.0, rate: 0.9 },
+  { id: 'british-female', name: 'British Female', accent: '🇬🇧', description: 'Emma - Elegant & Warm', lang: 'en-GB', pitch: 1.1, rate: 0.95 },
+  { id: 'american-male', name: 'American Male', accent: '🇺🇸', description: 'Michael - Confident & Direct', lang: 'en-US', pitch: 1.0, rate: 0.95 },
+  { id: 'american-female', name: 'American Female', accent: '🇺🇸', description: 'Sarah - Friendly & Professional', lang: 'en-US', pitch: 1.1, rate: 0.95 },
+  { id: 'indian-british', name: 'Indo-British', accent: '🇮🇳🇬🇧', description: 'Rajan - Cultured & Warm', lang: 'en-GB', pitch: 0.95, rate: 0.85 },
+  { id: 'european-male', name: 'European Male', accent: '🇪🇺', description: 'Lars - Continental & Precise', lang: 'en-US', pitch: 0.9, rate: 0.85 },
+];
 
 export default function VoicePage() {
   const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
@@ -11,354 +31,480 @@ export default function VoicePage() {
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
   const [error, setError] = useState('');
+  const [selectedAccent, setSelectedAccent] = useState<AccentStyle>('indian-british');
+  const [showDropdown, setShowDropdown] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState('');
+
+  const currentVoice = VOICE_OPTIONS.find(v => v.id === selectedAccent)!;
 
   const SpeechRecognitionApi = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
   }, []);
 
-  const pickBritishMaleVoice = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices();
-    const british = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'));
-    if (!british.length) return null;
-    if (selectedVoiceName) {
-      const selected = british.find((voice) => voice.name === selectedVoiceName);
-      if (selected) return selected;
-    }
-    const maleHint = british.find((voice) =>
-      /male|daniel|george|arthur|ryan|oliver/i.test(voice.name)
-    );
-    return maleHint || british[0];
-  };
-
-  const loadVoices = async () => {
+  // Load voices
+  const loadVoices = useCallback(async () => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const voices = window.speechSynthesis
-      .getVoices()
-      .filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'));
-    setAvailableVoices(voices);
+    
+    const allVoices = window.speechSynthesis.getVoices();
+    const matchingVoices = allVoices.filter(v => v.lang.startsWith(currentVoice.lang));
+    setAvailableVoices(matchingVoices);
 
+    // Try to load saved voice
     try {
       const res = await fetch(`${API_BASE}/api/voice-settings`);
       const json = await res.json();
-      const saved = json?.voiceName || '';
-      if (saved && voices.some((voice) => voice.name === saved)) {
+      const saved = json?.data?.voiceName || '';
+      if (saved && allVoices.some(v => v.name === saved)) {
         setSelectedVoiceName(saved);
-      } else if (voices.length) {
-        setSelectedVoiceName(voices[0].name);
       }
-    } catch (_error) {
-      if (voices.length) setSelectedVoiceName(voices[0].name);
+    } catch {
+      // Use first matching voice
+      if (matchingVoices.length > 0) {
+        setSelectedVoiceName(matchingVoices[0].name);
+      }
+    }
+  }, [API_BASE, currentVoice.lang]);
+
+  // Get best voice for accent
+  const getBestVoice = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    const voices = window.speechSynthesis.getVoices();
+    const matchingVoices = voices.filter(v => v.lang.toLowerCase().startsWith(currentVoice.lang.split('-')[0]));
+    
+    if (selectedVoiceName) {
+      const found = matchingVoices.find(v => v.name === selectedVoiceName);
+      if (found) return found;
+    }
+
+    // Smart voice selection based on accent
+    const accentHints: Record<string, RegExp> = {
+      'british-male': /male|daniel|george|arthur|ryan|oliver/i,
+      'british-female': /female|emma|kate|sarah|lucy|olivia/i,
+      'american-male': /male|tom|mike|david|james/i,
+      'american-female': /female|samantha|susan|lisa|mary/i,
+      'indian-british': /male|daniel|george|ryan/i,
+      'european-male': /male|mike|tom|david/i,
+    };
+
+    const hint = accentHints[selectedAccent];
+    if (hint) {
+      return matchingVoices.find(v => hint.test(v.name.toLowerCase())) || matchingVoices[0] || null;
+    }
+    
+    return matchingVoices[0] || null;
+  }, [currentVoice.lang, selectedAccent, selectedVoiceName]);
+
+  // JARVIS-style greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    
+    const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Late night';
+    
+    const greetings = [
+      `${timeGreeting}, Ankith. I am MIKE, your personal operating system. It's ${dayOfWeek}. All systems are operational. How may I assist you today?`,
+      `${timeGreeting}, Ankith. MIKE online and ready. ${dayOfWeek} looks promising. What shall we accomplish?`,
+      `${timeGreeting}. I've been expecting you. It's ${dayOfWeek}. What's our mission today?`,
+    ];
+    
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  };
+
+  // Speak with selected accent
+  const speak = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = currentVoice.lang;
+    utterance.pitch = currentVoice.pitch;
+    utterance.rate = currentVoice.rate;
+    utterance.volume = 1;
+    
+    const voice = getBestVoice();
+    if (voice) utterance.voice = voice;
+    
+    utterance.onstart = () => setState('speaking');
+    utterance.onend = () => setState('idle');
+    utterance.onerror = () => {
+      setError('Speech playback failed');
+      setState('idle');
+    };
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Process voice command
+  const processCommand = async (input: string) => {
+    setState('processing');
+    try {
+      const res = await fetch(`${API_BASE}/api/voice-command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: input, voice: selectedAccent }),
+      });
+      const data = await res.json();
+      const reply = data?.data?.response || data?.data?.result || 'Command received, Ankith.';
+      setResponse(reply);
+      speak(reply);
+    } catch {
+      const fallback = 'I could not reach the backend service. Please check your connection.';
+      setResponse(fallback);
+      speak(fallback);
     }
   };
 
-  const persistVoiceSettings = async (voiceName: string) => {
+  // Handle microphone
+  const handleMicClick = () => {
+    if (state === 'listening' || state === 'speaking' || state === 'processing') {
+      window.speechSynthesis?.cancel();
+      setState('idle');
+      return;
+    }
+
+    setError('');
+    setTranscript('');
+    setResponse('');
+
+    if (!SpeechRecognitionApi) {
+      setError('Speech recognition not supported in this browser.');
+      return;
+    }
+
+    setState('listening');
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = currentVoice.lang;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event: any) => {
+      const spoken = event.results?.[0]?.[0]?.transcript?.trim();
+      if (spoken) {
+        setTranscript(spoken);
+        processCommand(spoken);
+      } else {
+        setError('No speech detected. Try again.');
+        setState('idle');
+      }
+    };
+
+    recognition.onerror = () => {
+      setError('Microphone access denied. Please allow microphone permissions.');
+      setState('idle');
+    };
+
+    recognition.onend = () => {
+      if (state === 'listening') setState('processing');
+    };
+
+    recognition.start();
+  };
+
+  // Persist accent selection
+  const selectAccent = async (accent: AccentStyle) => {
+    setSelectedAccent(accent);
+    setShowDropdown(false);
+    localStorage.setItem('mike-voice-accent', accent);
+    
     try {
       await fetch(`${API_BASE}/api/voice-settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          voiceName,
-          locale: 'en-GB',
-          style: 'british-male',
+          voiceName: selectedVoiceName || '',
+          locale: VOICE_OPTIONS.find(v => v.id === accent)!.lang,
+          style: accent,
         }),
       });
-    } catch (_error) {
-      // Keep local selection even if persistence fails.
-    }
+    } catch {}
   };
 
-  const speakResponse = (text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !text) {
-      setState('idle');
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-GB';
-    utterance.pitch = 0.95;
-    utterance.rate = 0.95;
-    const voice = pickBritishMaleVoice();
-    if (voice) utterance.voice = voice;
-
-    utterance.onend = () => setState('idle');
-    utterance.onerror = () => {
-      setError('Text-to-speech failed. Please check browser voice permissions.');
-      setState('idle');
-    };
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const processCommand = async (input: string) => {
-    setState('processing');
-    try {
-      const res = await fetch(`${API_BASE}/api/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, source: 'voice' }),
-      });
-      const data = await res.json();
-      const reply =
-        data?.result?.message || data?.response || data?.message || 'Command received.';
-      setResponse(reply);
-      setState('speaking');
-      speakResponse(reply);
-    } catch (_err) {
-      setResponse('I could not reach the backend service right now.');
-      setState('speaking');
-      speakResponse('I could not reach the backend service right now.');
-    }
-  };
-
-  const handleMicClick = () => {
-    if (state === 'idle') {
-      setError('');
-      setState('listening');
-      setTranscript('');
-      setResponse('');
-
-      if (!SpeechRecognitionApi) {
-        setError('Speech recognition is not supported in this browser.');
-        setState('idle');
-        return;
-      }
-
-      const recognition = new SpeechRecognitionApi();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onresult = (event: any) => {
-        const spokenText = event.results?.[0]?.[0]?.transcript?.trim() || '';
-        if (!spokenText) {
-          setError('No speech detected. Please try again.');
-          setState('idle');
-          return;
-        }
-        setTranscript(spokenText);
-        void processCommand(spokenText);
-      };
-
-      recognition.onerror = () => {
-        setError('Microphone input failed. Please allow microphone access.');
-        setState('idle');
-      };
-
-      recognition.onend = () => {
-        setState((currentState: VoiceState) => 
-          currentState === 'listening' ? 'processing' : currentState
-        );
-      };
-
-      recognition.start();
-    } else {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      setState('idle');
-      setTranscript('');
-      setResponse('');
-    }
-  };
-
+  // Load saved accent
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const handleVoices = () => {
-      void loadVoices();
-    };
-    window.speechSynthesis.onvoiceschanged = handleVoices;
-    void loadVoices();
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
+    const saved = localStorage.getItem('mike-voice-accent') as AccentStyle;
+    if (saved && VOICE_OPTIONS.some(v => v.id === saved)) {
+      setSelectedAccent(saved);
+    }
   }, []);
 
+  // Load voices on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, [loadVoices]);
+
+  // Auto-greet on mount
+  useEffect(() => {
+    const timer = setTimeout(() => speak(getGreeting()), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const tips = [
+    { cmd: 'What is my schedule today?', icon: '📅' },
+    { cmd: 'Create a task for tomorrow', icon: '✅' },
+    { cmd: 'Show me stock market updates', icon: '📈' },
+    { cmd: 'Read my package.json file', icon: '📁' },
+    { cmd: 'Show my GitHub info', icon: '🔗' },
+    { cmd: 'What is machine learning?', icon: '🧠' },
+  ];
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] max-w-3xl mx-auto">
-      {/* Title */}
-      <div className="text-center mb-16">
-        <h1 className="text-4xl font-bold text-glow mb-2">Voice Assistant</h1>
-        <p className="text-muted-foreground text-lg transition-all duration-300">
-          {state === 'idle' && 'Click the microphone to start speaking'}
-          {state === 'listening' && 'Listening to your voice...'}
-          {state === 'processing' && 'Processing your request...'}
-          {state === 'speaking' && 'Responding...'}
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] max-w-3xl mx-auto px-4">
+      {/* Title Section */}
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-3">
+          <span className="text-gradient">MIKE</span>
+          <span className="text-foreground"> Voice Interface</span>
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          {state === 'idle' && 'Click the microphone or say "Hey MIKE"'}
+          {state === 'listening' && (
+            <span className="text-accent animate-pulse">🎤 Listening to you...</span>
+          )}
+          {state === 'processing' && (
+            <span className="text-primary animate-pulse">⚡ Processing request...</span>
+          )}
+          {state === 'speaking' && (
+            <span className="text-green-400 animate-pulse">🔊 Responding...</span>
+          )}
         </p>
-        {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+        {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
       </div>
 
-      {/* Central Siri-style Orb with Animated Rings */}
-      <div className="relative w-80 h-80 mb-16 flex items-center justify-center">
-        {/* Animated outer rings */}
-        <div className={`absolute inset-0 rounded-full border-2 ${state !== 'idle' ? 'border-accent/40 animate-pulse' : 'border-border/20'} transition-all duration-300`} />
-        <div className={`absolute inset-4 rounded-full border-2 ${state === 'listening' || state === 'speaking' ? 'border-accent/60' : 'border-border/20'} transition-all duration-300`} style={{ animationDelay: '0.1s' }} />
-        <div className={`absolute inset-8 rounded-full border-2 ${state === 'listening' || state === 'speaking' ? 'border-accent/80' : 'border-border/20'} transition-all duration-300`} style={{ animationDelay: '0.2s' }} />
+      {/* JARVIS Core Animation */}
+      <div className="relative w-72 h-72 mb-12 flex items-center justify-center">
+        {/* Outer glow rings */}
+        <div className={`absolute inset-[-20px] rounded-full opacity-20 blur-xl transition-all duration-700 ${
+          state === 'idle' ? 'bg-accent/20 scale-100' :
+          state === 'listening' ? 'bg-accent/40 scale-110 animate-pulse' :
+          state === 'processing' ? 'bg-primary/40 scale-105 animate-spin-slow' :
+          'bg-green-500/40 scale-110 animate-pulse'
+        }`} />
 
-        {/* Background gradient orb */}
-        <div
-          className={`
-            absolute inset-0 rounded-full transition-all duration-300
-            ${
-              state === 'idle'
-                ? 'bg-gradient-to-br from-accent/10 to-primary/10'
-                : state === 'listening'
-                  ? 'bg-gradient-to-br from-accent/40 to-primary/30 animate-neon-pulse'
-                  : state === 'processing'
-                    ? 'bg-gradient-to-br from-primary/40 to-accent/30 animate-neon-pulse'
-                    : 'bg-gradient-to-br from-green-500/40 to-primary/30 animate-neon-pulse'
-            }
-          `}
-        />
+        {/* Ring 1 - Outer */}
+        <div className={`absolute inset-0 rounded-full border-2 transition-all duration-500 ${
+          state === 'idle' ? 'border-accent/30' : 'border-accent/60'
+        }`} style={{
+          animation: state !== 'idle' ? 'ringPulse 2s infinite' : 'none',
+          animationDelay: '0s'
+        }} />
 
-        {/* Siri-style waveform bars */}
-        <div className="absolute inset-0 flex items-center justify-center gap-1.5 px-16">
-          {[...Array(15)].map((_, i) => {
-            const isCenter = i === 7;
-            return (
-              <div
-                key={i}
-                className={`w-1.5 rounded-full transition-all duration-200 ${
-                  state === 'listening' || state === 'speaking'
-                    ? 'bg-gradient-to-t from-accent to-primary'
-                    : state === 'processing'
-                      ? 'bg-gradient-to-t from-primary to-accent'
-                      : 'bg-border/50'
-                }`}
-                style={{
-                  height: state === 'idle' ? '6px' : state === 'processing' ? `${Math.abs(Math.sin(i * 0.5) * 60 + 20)}px` : `${Math.abs(Math.sin(i * 0.3) * 70 + 25)}px`,
-                  animationDelay: `${i * 0.08}s`,
-                  opacity: state === 'idle' ? 0.4 : isCenter ? 1 : 0.8,
-                }}
-              />
-            );
-          })}
+        {/* Ring 2 - Middle */}
+        <div className={`absolute inset-4 rounded-full border-2 transition-all duration-500 ${
+          state === 'idle' ? 'border-accent/20' : 'border-accent/50'
+        }`} style={{
+          animation: state !== 'idle' ? 'ringPulse 2s infinite' : 'none',
+          animationDelay: '0.3s'
+        }} />
+
+        {/* Ring 3 - Inner */}
+        <div className={`absolute inset-8 rounded-full border transition-all duration-500 ${
+          state === 'idle' ? 'border-accent/15' : 'border-accent/40'
+        }`} style={{
+          animation: state !== 'idle' ? 'ringPulse 2s infinite' : 'none',
+          animationDelay: '0.6s'
+        }} />
+
+        {/* Core circle */}
+        <div className={`absolute inset-12 rounded-full transition-all duration-500 ${
+          state === 'idle' 
+            ? 'bg-gradient-to-br from-accent/20 to-primary/10'
+            : state === 'listening'
+              ? 'bg-gradient-to-br from-accent/50 to-accent/20 animate-corePulse'
+              : state === 'processing'
+                ? 'bg-gradient-to-br from-primary/50 to-accent/30 animate-coreSpin'
+                : 'bg-gradient-to-br from-green-500/50 to-accent/30 animate-corePulse'
+        }`} />
+
+        {/* Center dot */}
+        <div className={`absolute w-4 h-4 rounded-full transition-all duration-300 ${
+          state === 'idle'
+            ? 'bg-accent/50'
+            : state === 'listening'
+              ? 'bg-accent shadow-lg shadow-accent/50 animate-pulse'
+              : state === 'processing'
+                ? 'bg-white shadow-lg shadow-white/50 animate-spin'
+                : 'bg-green-400 shadow-lg shadow-green-500/50 animate-pulse'
+        }`} />
+
+        {/* Waveform bars */}
+        <div className="absolute inset-0 flex items-center justify-center gap-1 px-20">
+          {[...Array(19)].map((_, i) => (
+            <div
+              key={i}
+              className="w-1 rounded-full transition-all duration-200"
+              style={{
+                height: state === 'idle' ? '4px' : `${Math.abs(Math.sin(i * 0.4) * 30 + 15)}px`,
+                backgroundColor: state === 'idle' ? 'rgba(0,200,255,0.3)' : 
+                  state === 'speaking' ? `hsl(${160 + i * 5}, 80%, 60%)` : `hsl(${200 + i * 3}, 80%, 55%)`,
+                animationDelay: `${i * 0.05}s`,
+                opacity: state === 'idle' ? 0.5 : 0.9,
+              }}
+            />
+          ))}
         </div>
-
-        {/* Center pulsing dot */}
-        <div
-          className={`
-            absolute w-5 h-5 rounded-full transition-all duration-300
-            ${
-              state === 'idle'
-                ? 'bg-border/50'
-                : state === 'listening'
-                  ? 'bg-accent animate-pulse shadow-lg shadow-accent/50'
-                  : state === 'processing'
-                    ? 'bg-primary animate-spin shadow-lg shadow-primary/50'
-                    : 'bg-green-500 animate-pulse shadow-lg shadow-green-500/50'
-            }
-          `}
-        />
       </div>
 
-      {/* Transcript Display - Siri-style */}
+      {/* Transcript */}
       {transcript && (
-        <div className="glass-panel p-8 w-full mb-8 border border-accent/30 animate-fade-in">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">You Said</p>
-          <p className="text-xl text-accent font-medium">&quot;{transcript}&quot;</p>
+        <div className="glass-panel p-6 w-full mb-6 border border-accent/30 animate-fade-in">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">You Said</p>
+          <p className="text-lg text-accent font-medium">&ldquo;{transcript}&rdquo;</p>
         </div>
       )}
 
-      {/* Response Display */}
+      {/* Response */}
       {state === 'speaking' && response && (
-        <div className="glass-panel p-8 w-full mb-8 border border-green-500/30 animate-fade-in">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">Response</p>
-          <p className="text-lg text-foreground leading-relaxed">{response}</p>
-          <div className="flex gap-1 mt-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-1 flex-1 bg-gradient-to-r from-green-500 to-accent rounded-full" style={{ animationDelay: `${i * 0.2}s` }} />
-            ))}
-          </div>
+        <div className="glass-panel p-6 w-full mb-6 border border-green-500/30 animate-fade-in">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">MIKE Response</p>
+          <p className="text-foreground leading-relaxed">{response}</p>
         </div>
       )}
 
-      {/* Control Buttons */}
-      <div className="flex items-center gap-6 mt-12">
+      {/* Controls */}
+      <div className="flex items-center gap-8 mb-12">
+        {/* Mic Button */}
         <button
           onClick={handleMicClick}
-          className={`
-            flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 
-            shadow-lg hover:scale-110 active:scale-95
-            ${
-              state === 'idle'
-                ? 'bg-gradient-to-br from-accent/30 to-primary/20 border-2 border-accent hover:from-accent/40 hover:to-primary/30 neon-glow cursor-pointer'
-                : state === 'listening'
-                  ? 'bg-gradient-to-br from-accent/50 to-accent/30 border-2 border-accent neon-glow-intense animate-neon-pulse'
-                  : state === 'processing'
-                    ? 'bg-gradient-to-br from-primary/50 to-primary/30 border-2 border-primary neon-glow-intense'
-                    : 'bg-gradient-to-br from-green-500/50 to-green-500/30 border-2 border-green-500 neon-glow-green-intense'
-            }
-          `}
+          className={`relative w-20 h-20 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 ${
+            state === 'idle'
+              ? 'bg-gradient-to-br from-accent/30 to-primary/20 border-2 border-accent shadow-lg shadow-accent/20'
+              : state === 'listening'
+                ? 'bg-gradient-to-br from-accent/60 to-accent/40 border-2 border-accent shadow-xl shadow-accent/40 animate-pulse'
+                : state === 'processing'
+                  ? 'bg-gradient-to-br from-primary/60 to-primary/40 border-2 border-primary shadow-xl shadow-primary/40'
+                  : 'bg-gradient-to-br from-green-500/60 to-green-500/40 border-2 border-green-500 shadow-xl shadow-green-500/40'
+          } flex items-center justify-center cursor-pointer`}
         >
           {state === 'idle' || state === 'processing' ? (
-            <Mic2 className={`w-10 h-10 transition-all ${state === 'idle' ? 'text-accent' : 'text-primary'}`} />
+            <Mic2 className="w-8 h-8 text-accent" />
           ) : (
-            <StopCircle className="w-10 h-10 text-accent" />
+            <StopCircle className="w-8 h-8 text-white" />
           )}
         </button>
 
+        {/* Cancel button */}
         {state !== 'idle' && (
           <button
-            onClick={handleMicClick}
-            className="px-8 py-3 rounded-lg glass-panel border border-border/50 text-foreground hover:text-accent transition-all duration-300 hover:neon-glow text-sm font-medium hover:scale-105 active:scale-95"
+            onClick={() => { window.speechSynthesis?.cancel(); setState('idle'); }}
+            className="px-6 py-2.5 rounded-lg glass-panel border border-border/50 text-foreground hover:text-accent transition-all duration-300 text-sm"
           >
             Cancel
           </button>
         )}
       </div>
 
-      {/* Voice Commands Suggestions */}
-      <div className="mt-8 glass-panel p-5 w-full border border-border/30">
-        <div className="flex items-center gap-2 mb-3">
-          <Volume2 className="w-4 h-4 text-accent" />
-          <p className="text-sm font-semibold text-foreground">Voice Output</p>
+      {/* Voice Selector Dropdown */}
+      <div className="w-full mb-6">
+        <div className="glass-panel p-4 border border-border/30">
+          <div className="flex items-center gap-2 mb-3">
+            <Volume2 className="w-4 h-4 text-accent" />
+            <span className="text-sm font-semibold">Voice Profile</span>
+          </div>
+          
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="w-full flex items-center justify-between bg-card/40 border border-border/30 rounded-lg px-4 py-3 hover:border-accent/50 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{currentVoice.accent}</span>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">{currentVoice.name}</p>
+                  <p className="text-xs text-muted-foreground">{currentVoice.description}</p>
+                </div>
+              </div>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-background/95 backdrop-blur-xl border border-border/50 rounded-xl overflow-hidden z-50 shadow-2xl">
+                {VOICE_OPTIONS.map(voice => (
+                  <button
+                    key={voice.id}
+                    onClick={() => selectAccent(voice.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/10 transition-all ${
+                      selectedAccent === voice.id ? 'bg-accent/10 border-l-2 border-accent' : ''
+                    }`}
+                  >
+                    <span className="text-xl">{voice.accent}</span>
+                    <div className="text-left flex-1">
+                      <p className="text-sm font-medium text-foreground">{voice.name}</p>
+                      <p className="text-xs text-muted-foreground">{voice.description}</p>
+                    </div>
+                    {selectedAccent === voice.id && (
+                      <Check className="w-4 h-4 text-accent" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <label className="text-xs text-muted-foreground block mb-2">British Voice (Male Preferred)</label>
-        <select
-          className="w-full bg-card/40 border border-border/30 rounded-lg px-3 py-2 text-sm text-foreground"
-          value={selectedVoiceName}
-          onChange={(event) => {
-            const voiceName = event.target.value;
-            setSelectedVoiceName(voiceName);
-            void persistVoiceSettings(voiceName);
-          }}
-        >
-          {availableVoices.length === 0 && <option value="">No UK voices found on this device</option>}
-          {availableVoices.map((voice) => (
-            <option key={voice.name} value={voice.name}>
-              {voice.name} ({voice.lang})
-            </option>
-          ))}
-        </select>
       </div>
 
-      <div className="mt-16 glass-panel p-8 w-full border border-border/30">
+      {/* Voice Commands Tips */}
+      <div className="glass-panel p-6 w-full border border-border/30">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <Radio className="w-5 h-5 text-accent" />
-          <h3 className="font-semibold text-foreground text-lg">Try Voice Commands</h3>
+          <Radio className="w-4 h-4 text-accent" />
+          <h3 className="font-semibold text-foreground">Try Saying...</h3>
         </div>
-        <p className="text-sm text-muted-foreground mb-6 text-center">
-          Say any of these to get started:
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { cmd: 'What is my schedule today?', icon: '📅' },
-            { cmd: 'Create a task for tomorrow', icon: '✓' },
-            { cmd: 'Show me market updates', icon: '📈' },
-            { cmd: 'Schedule a meeting', icon: '🗓️' },
-          ].map((item) => (
-            <div key={item.cmd} className="p-3 rounded-lg bg-card/40 border border-border/30 hover:border-accent/50 transition-all hover:bg-card/60 cursor-pointer group">
-              <p className="text-sm text-foreground/70 font-mono group-hover:text-accent transition-colors">
-                {item.icon} {item.cmd}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {tips.map((tip) => (
+            <div
+              key={tip.cmd}
+              onClick={() => {
+                speak(tip.cmd);
+              }}
+              className="p-3 rounded-lg bg-card/30 border border-border/30 hover:border-accent/50 hover:bg-card/50 cursor-pointer transition-all group"
+            >
+              <p className="text-sm text-foreground/70 group-hover:text-accent transition-colors">
+                {tip.icon} {tip.cmd}
               </p>
             </div>
           ))}
         </div>
       </div>
+
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes ringPulse {
+          0%, 100% { transform: scale(1); opacity: 0.6; }
+          50% { transform: scale(1.05); opacity: 1; }
+        }
+        @keyframes corePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+        @keyframes coreSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-corePulse {
+          animation: corePulse 1.5s ease-in-out infinite;
+        }
+        .animate-coreSpin {
+          animation: coreSpin 4s linear infinite;
+        }
+        .animate-spin-slow {
+          animation: coreSpin 8s linear infinite;
+        }
+        .text-gradient {
+          background: linear-gradient(135deg, #00c8ff, #0066ff);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 
 const commandRoutes = require("./routes/command-routes");
+const voiceRoutes = require("./routes/voice-routes");
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get("/api/health", (req, res) => {
 
 // routes
 app.use("/api", commandRoutes);
+app.use("/api", voiceRoutes);
 
 // export for vercel
 module.exports = app;
@@ -25,6 +27,7 @@ module.exports = app;
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.BACKEND_PORT || 8787;
   app.listen(PORT, () => {
-    console.log(`Running on http://localhost:${PORT}`);
+    console.log(`🚀 MIKE OS Backend running on http://localhost:${PORT}`);
+    console.log(`🎙️ Voice API ready at http://localhost:${PORT}/api/voice-command`);
   });
 }

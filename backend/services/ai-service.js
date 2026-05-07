@@ -1,100 +1,130 @@
 require("dotenv").config();
 const Groq = require("groq-sdk");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fs = require('fs').promises;
+const path = require('path');
+const { searchWeb, getNews, quickFact } = require('./webService');
+const { readProjectFile, listProjectFiles, writeProjectFile, searchInFiles } = require('./fileService');
+const { getRepoInfo, searchRepos, getRecentCommits } = require('./githubService');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ─── ROUTER — decides which brain to use ─────────────────────────────────────
-
-function isComplexQuery(input) {
-  const complexKeywords = [
-    'stock', 'invest', 'market', 'crypto', 'bitcoin', 'ethereum', 'portfolio',
-    'should i', 'advice', 'recommend', 'analyze', 'analysis', 'research',
-    'explain', 'why', 'how does', 'what is', 'teach', 'learn',
-    'news', 'latest', 'today', 'happening', 'compare',
-    'plan', 'strategy', 'goal', 'improve', 'optimize'
-  ];
-  const lower = input.toLowerCase();
-  return complexKeywords.some(kw => lower.includes(kw));
-}
-
-// ─── FAST BRAIN — Groq LLaMA 8B for simple tasks ────────────────────────────
-
-async function askGroq(input, conversationHistory = []) {
-  const messages = [
-    {
-      role: "system",
-      content: `You are MIKE, a sharp personal AI assistant built into MIKE OS — a personal operating system for high-performance living. 
-      
-You help with: creating tasks, logging health data, checking progress, quick answers, and daily management.
-
-Keep responses concise and action-oriented. You are talking to Ankith, a 3rd year engineering student and developer.
-If the user wants to create a task, confirm it clearly.
-If they ask about their day/progress, give a motivating summary.
-Never say you're an AI. You are MIKE.`
-    },
-    ...conversationHistory.slice(-6),
-    { role: "user", content: input }
-  ];
-
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages,
-    max_tokens: 512,
-    temperature: 0.7,
-  });
-
-  return completion.choices[0]?.message?.content || "Done.";
-}
-
-// ─── MAIN BRAIN — Gemini 1.5 Pro for complex reasoning ───────────────────────
-
-async function askGemini(input, conversationHistory = [], context = {}) {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  let systemContext = `You are MIKE, an elite personal AI assistant and life advisor inside MIKE OS.
-
-You specialize in: stock market education, financial advice for beginners, deep research, strategic planning, and life optimization.
-
-User profile: Ankith RV, 3rd year EEE student at NITK, developer, building startups, learning investing as a beginner.
-
-Your style:
-- Teach like a mentor, not a textbook
-- Give actionable insights, not just information  
-- For stocks: always explain WHY, give beginner context, mention risks
-- Be direct and intelligent
-- Never say you're an AI. You are MIKE.`;
-
-  if (context.stockData) {
-    systemContext += `\n\nReal-time stock data available:\n${JSON.stringify(context.stockData, null, 2)}`;
+// ─── MEMORY SYSTEM ─────────────────────────────────────────────────────────
+class MemorySystem {
+  constructor() {
+    this.memoryPath = path.join(__dirname, '..', '..', 'data', 'mike_memory.json');
+    this.memory = {
+      user: {
+        name: "Ankith RV",
+        education: "3rd year EEE, NITK Surathkal",
+        interests: [],
+        goals: [],
+        preferences: {},
+        projects: {}
+      },
+      knowledge: {
+        conversations: [],
+        learnedFacts: [],
+        fileCache: {}
+      },
+      stats: {
+        totalInteractions: 0,
+        lastActive: null,
+        commandsRun: 0
+      }
+    };
+    this.initialized = false;
   }
 
-  if (context.news) {
-    systemContext += `\n\nLatest news context:\n${context.news}`;
+  async init() {
+    try {
+      await fs.mkdir(path.dirname(this.memoryPath), { recursive: true });
+      const data = await fs.readFile(this.memoryPath, 'utf8');
+      this.memory = { ...this.memory, ...JSON.parse(data) };
+    } catch {
+      await this.save();
+    }
+    this.initialized = true;
   }
 
-  const historyText = conversationHistory.slice(-6)
-    .map(m => `${m.role === 'user' ? 'Ankith' : 'MIKE'}: ${m.content}`)
-    .join('\n');
+  async save() {
+    await fs.writeFile(this.memoryPath, JSON.stringify(this.memory, null, 2));
+  }
 
-  const fullPrompt = `${systemContext}
+  async learn(input, response, context = {}) {
+    this.memory.stats.totalInteractions++;
+    this.memory.stats.lastActive = new Date().toISOString();
+    
+    this.memory.knowledge.conversations.push({
+      timestamp: new Date().toISOString(),
+      input: input.substring(0, 300),
+      topics: context.topics || [],
+      actions: context.actions || []
+    });
 
-${historyText ? `Recent conversation:\n${historyText}\n` : ''}
-Ankith: ${input}
-MIKE:`;
+    if (this.memory.knowledge.conversations.length > 200) {
+      this.memory.knowledge.conversations = 
+        this.memory.knowledge.conversations.slice(-200);
+    }
 
-  const result = await model.generateContent(fullPrompt);
-  return result.response.text();
+    if (input.toLowerCase().includes('my project is')) {
+      const projectName = input.split('my project is')[1]?.split(/[.,!?]/)[0]?.trim();
+      if (projectName) {
+        this.memory.user.projects[projectName] = {
+          mentioned: new Date().toISOString(),
+          context: input
+        };
+      }
+    }
+
+    await this.save();
+  }
+
+  getContext() {
+    return {
+      user: this.memory.user,
+      recentTopics: this.memory.knowledge.conversations
+        .slice(-10)
+        .map(c => c.topics)
+        .flat()
+        .filter((v, i, a) => a.indexOf(v) === i),
+      totalInteractions: this.memory.stats.totalInteractions,
+      recentConversations: this.memory.knowledge.conversations.slice(-3)
+    };
+  }
 }
 
-// ─── STOCK DATA — Alpha Vantage ───────────────────────────────────────────────
+const memory = new MemorySystem();
 
+// ─── COMMAND PARSER ────────────────────────────────────────────────────────
+function parseCommand(input) {
+  const commands = {
+    readFile: /read\s+(?:the\s+)?file\s+["']?([^"']+)["']?|show\s+(?:me\s+)?(?:the\s+)?(?:contents?\s+of\s+)?["']?([^"']+)["']?/i,
+    listFiles: /list\s+(?:all\s+|my\s+)?(?:project\s+)?files|show\s+(?:me\s+)?(?:all\s+|my\s+)?(?:project\s+)?files|what\s+(?:are\s+)?(?:my\s+)?files/i,
+    searchInFiles: /search\s+(?:in\s+)?files?\s+for\s+(.+)|find\s+(.+)\s+in\s+(?:my\s+)?files/i,
+    searchRepo: /search\s+(?:my\s+)?(?:github|repo)\s+(?:for\s+)?(.+)|find\s+in\s+(?:my\s+)?repo\s+(.+)/i,
+    githubInfo: /(?:show|get|what\s+(?:is|are))\s+(?:my\s+)?(?:github|repo)\s+(?:info|stats|status|details)/i,
+    recentCommits: /(?:show|get)\s+(?:recent\s+)?commits|what\s+(?:are|were)\s+(?:the\s+)?(?:recent|latest)\s+commits/i,
+    createFile: /create\s+(?:a\s+)?file\s+["']?([^"']+)["']?(?:\s+with\s+(.+))?|write\s+(?:a\s+)?file\s+["']?([^"']+)["']?/i
+  };
+
+  for (const [action, pattern] of Object.entries(commands)) {
+    const match = input.match(pattern);
+    if (match) {
+      return {
+        action,
+        params: match.slice(1).filter(Boolean),
+        isCommand: true
+      };
+    }
+  }
+
+  return { isCommand: false };
+}
+
+// ─── STOCK DATA ────────────────────────────────────────────────────────────
 async function getStockData(symbol) {
   const key = process.env.ALPHA_VANTAGE_KEY;
-  if (!key || key === 'your_alpha_vantage_key_here') {
-    return null;
-  }
+  if (!key || key === 'your_alpha_vantage_key_here') return null;
 
   try {
     const fetch = (await import('node-fetch')).default;
@@ -117,8 +147,6 @@ async function getStockData(symbol) {
   }
 }
 
-// ─── EXTRACT STOCK SYMBOL from message ───────────────────────────────────────
-
 function extractStockSymbol(input) {
   const knownStocks = {
     'nvidia': 'NVDA', 'nvda': 'NVDA',
@@ -129,8 +157,8 @@ function extractStockSymbol(input) {
     'tesla': 'TSLA', 'tsla': 'TSLA',
     'meta': 'META', 'facebook': 'META',
     'netflix': 'NFLX', 'nflx': 'NFLX',
-    'tata': 'TCS.BSE', 'infosys': 'INFY', 'reliance': 'RELIANCE.BSE',
-    'zomato': 'ZOMATO.BSE',
+    'tata': 'TCS.BSE', 'infosys': 'INFY',
+    'reliance': 'RELIANCE.BSE', 'zomato': 'ZOMATO.BSE',
   };
 
   const lower = input.toLowerCase();
@@ -142,23 +170,274 @@ function extractStockSymbol(input) {
   return tickerMatch ? tickerMatch[0] : null;
 }
 
-// ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
+// ─── ROUTER ────────────────────────────────────────────────────────────────
+function analyzeQuery(input) {
+  const lower = input.toLowerCase();
+  
+  const topics = {
+    stocks: ['stock', 'invest', 'market', 'crypto', 'bitcoin', 'portfolio', 'nvidia', 'apple', 'tesla', 'trading'],
+    coding: ['code', 'function', 'refactor', 'debug', 'architecture', 'react', 'node', 'javascript', 'python', 'api', 'component'],
+    productivity: ['plan', 'goal', 'habit', 'routine', 'focus', 'improve', 'life', 'schedule', 'deadline'],
+    research: ['explain', 'why', 'how', 'what is', 'research', 'analyze', 'compare', 'difference'],
+    news: ['news', 'latest', 'today', 'happening', 'current', 'recent', 'update'],
+    personal: ['my', 'remember', 'preference', 'about me', 'ankith'],
+    files: ['file', 'read', 'write', 'create', 'folder', 'directory', 'project files'],
+    github: ['github', 'repo', 'repository', 'commit', 'push', 'pull', 'branch']
+  };
 
-async function processMessage(input, conversationHistory = []) {
-  const complex = isComplexQuery(input);
-  let stockData = null;
-
-  if (complex) {
-    const symbol = extractStockSymbol(input);
-    if (symbol) {
-      stockData = await getStockData(symbol);
+  const detected = [];
+  for (const [topic, keywords] of Object.entries(topics)) {
+    if (keywords.some(kw => lower.includes(kw))) {
+      detected.push(topic);
     }
-    const response = await askGemini(input, conversationHistory, { stockData });
-    return { response, brain: 'gemini', stockData };
-  } else {
-    const response = await askGroq(input, conversationHistory);
-    return { response, brain: 'groq', stockData: null };
   }
+
+  return {
+    topics: detected,
+    isComplex: detected.length > 0 || input.length > 50,
+    needsSearch: detected.includes('research') || detected.includes('news'),
+    needsFiles: detected.includes('files'),
+    needsGithub: detected.includes('github'),
+    needsContext: detected.includes('personal')
+  };
+}
+
+// ─── FAST BRAIN ────────────────────────────────────────────────────────────
+async function askGroqFast(input, conversationHistory = []) {
+  const messages = [
+    {
+      role: "system",
+      content: `You are MIKE, a sharp personal AI assistant inside MIKE OS. 
+You can help with: tasks, files, quick answers, project info.
+Keep responses short and action-oriented. User is Ankith.
+You have access to his files and projects.
+Never say you're an AI. You are MIKE.`
+    },
+    ...conversationHistory.slice(-6),
+    { role: "user", content: input }
+  ];
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages,
+    max_tokens: 512,
+    temperature: 0.7,
+  });
+
+  return completion.choices[0]?.message?.content || "Done.";
+}
+
+// ─── MAIN BRAIN ────────────────────────────────────────────────────────────
+async function askGroqSmart(input, conversationHistory = [], context = {}) {
+  const memoryContext = context.memory || {};
+  
+  let systemContent = `You are MIKE, an elite personal AI advisor inside MIKE OS.
+Powered by Llama 3.3 70B intelligence.
+
+YOUR CAPABILITIES:
+- Real-time stock analysis and market education
+- Code review, debugging, architecture advice
+- File system access to user's projects
+- GitHub repository analysis
+- Web search for current information
+- Personal memory of user preferences
+
+USER PROFILE:
+Name: ${memoryContext.user?.name || 'Ankith RV'}
+Education: ${memoryContext.user?.education || 'Student at NITK Surathkal'}
+Projects: ${Object.keys(memoryContext.user?.projects || {}).join(', ') || 'No projects tracked yet'}
+Recent topics: ${memoryContext.recentTopics?.join(', ') || 'General assistance'}
+Total conversations: ${memoryContext.totalInteractions || 0}
+
+${context.stockData ? `📈 LIVE MARKET DATA:
+${context.stockData.symbol}: $${context.stockData.price}
+Change Today: ${context.stockData.change}%
+Day Range: $${context.stockData.low} - $${context.stockData.high}
+Volume: ${context.stockData.volume}` : ''}
+
+${context.news && context.news.length > 0 ? `📰 LATEST NEWS:
+${context.news.map(n => `• ${n.title}`).join('\n')}` : ''}
+
+${context.webResults?.abstract ? `🔍 WEB SEARCH:
+${context.webResults.abstract}` : ''}
+
+${context.fileContents ? `📁 FILE CONTENTS (${context.fileName}):
+\`\`\`
+${context.fileContents}
+\`\`\`` : ''}
+
+${context.fileList ? `📂 PROJECT FILES:
+${context.fileList.map(f => `• ${f.name} (${f.type})`).join('\n')}` : ''}
+
+${context.githubInfo ? `🔗 GITHUB:
+${JSON.stringify(context.githubInfo, null, 2)}` : ''}
+
+RESPONSE STYLE:
+- Mentor tone: teach, don't just tell
+- Actionable insights: always suggest next steps
+- Context-aware: reference user's projects and preferences
+- Practical: give working code, real examples
+- Never say you're an AI. You are MIKE.`;
+
+  const messages = [
+    { role: "system", content: systemContent },
+    ...conversationHistory.slice(-10),
+    { role: "user", content: input }
+  ];
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages,
+    max_tokens: 2048,
+    temperature: 0.6,
+  });
+
+  return completion.choices[0]?.message?.content || "Let me analyze that...";
+}
+
+// ─── MAIN PROCESSOR ────────────────────────────────────────────────────────
+async function processMessage(input, conversationHistory = []) {
+  if (!memory.initialized) await memory.init();
+
+  // Check for commands first
+  const command = parseCommand(input);
+  let commandResult = null;
+
+  if (command.isCommand) {
+    try {
+      switch (command.action) {
+        case 'readFile':
+          const fileName = command.params[0];
+          const fileData = await readProjectFile(fileName);
+          commandResult = {
+            fileContents: fileData.contents,
+            fileName: fileName,
+            action: 'file_read'
+          };
+          break;
+        
+        case 'listFiles':
+          const files = await listProjectFiles();
+          commandResult = {
+            fileList: files,
+            action: 'file_list'
+          };
+          break;
+        
+        case 'searchInFiles':
+          const searchQuery = command.params[0];
+          const searchResults = await searchInFiles(searchQuery);
+          commandResult = {
+            searchResults,
+            action: 'file_search'
+          };
+          break;
+        
+        case 'searchRepo':
+          const searchTerm = command.params[0];
+          const repos = await searchRepos(searchTerm);
+          commandResult = {
+            githubInfo: repos,
+            action: 'github_search'
+          };
+          break;
+        
+        case 'githubInfo':
+          const repoInfo = await getRepoInfo();
+          commandResult = {
+            githubInfo: repoInfo,
+            action: 'github_info'
+          };
+          break;
+        
+        case 'recentCommits':
+          const commits = await getRecentCommits();
+          commandResult = {
+            githubInfo: { recentCommits: commits },
+            action: 'github_commits'
+          };
+          break;
+        
+        case 'createFile':
+          const newFileName = command.params[0];
+          const content = command.params[1] || '';
+          await writeProjectFile(newFileName, content);
+          commandResult = {
+            action: 'file_created',
+            fileName: newFileName
+          };
+          break;
+      }
+    } catch (error) {
+      console.error('Command error:', error);
+      commandResult = { error: error.message };
+    }
+  }
+
+  // Analyze the query
+  const analysis = analyzeQuery(input);
+  let stockData = null;
+  let news = null;
+  let webResults = null;
+
+  // Fetch relevant data
+  if (analysis.topics.includes('stocks') || analysis.needsSearch) {
+    const symbol = extractStockSymbol(input);
+    if (symbol) stockData = await getStockData(symbol);
+  }
+
+  if (analysis.needsSearch) {
+    [news, webResults] = await Promise.all([
+      getNews(analysis.topics[0] || 'general'),
+      searchWeb(input)
+    ]);
+    
+    // Try quick fact lookup for specific questions
+    if (!webResults?.abstract && (input.toLowerCase().startsWith('what is') || input.toLowerCase().startsWith('who is'))) {
+      const factQuery = input.replace(/^(what|who) is /i, '').trim();
+      const fact = await quickFact(factQuery);
+      if (fact) {
+        webResults = {
+          abstract: fact.summary,
+          relatedTopics: [],
+          source: 'Wikipedia',
+          url: fact.url
+        };
+      }
+    }
+  }
+
+  const memoryContext = memory.getContext();
+
+  // Merge command results with context
+  const context = {
+    stockData,
+    news,
+    webResults,
+    memory: memoryContext,
+    ...commandResult
+  };
+
+  // Route to appropriate brain
+  let response;
+  if (analysis.isComplex || command.isCommand) {
+    response = await askGroqSmart(input, conversationHistory, context);
+  } else {
+    response = await askGroqFast(input, conversationHistory);
+  }
+
+  // Learn from interaction
+  await memory.learn(input, response, {
+    topics: analysis.topics,
+    actions: command.isCommand ? [command.action] : []
+  });
+
+  return {
+    response,
+    brain: (analysis.isComplex || command.isCommand) ? 'groq-smart' : 'groq-fast',
+    data: { stockData, news, webResults, ...commandResult },
+    command: command.isCommand ? command.action : null
+  };
 }
 
 async function generateInsight({ lifeScore }) {
