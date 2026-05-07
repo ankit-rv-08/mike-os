@@ -1,0 +1,120 @@
+{
+  "user": {
+    "name": "Ankith RV",
+    "education": "3rd year EEE, NITK Surathkal",
+    "interests": [],
+    "goals": [],
+    "preferences": {},
+    "projects": {}
+  },
+  "knowledge": {
+    "conversations": [
+      {
+        "timestamp": "2026-05-07T18:23:47.228Z",
+        "input": "list my project files",
+        "topics": [
+          "personal",
+          "files"
+        ],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T18:23:49.112Z",
+        "input": "show my github repo info",
+        "topics": [
+          "research",
+          "personal",
+          "github"
+        ],
+        "actions": [
+          "readFile"
+        ]
+      },
+      {
+        "timestamp": "2026-05-07T18:23:51.366Z",
+        "input": "what is machine learning",
+        "topics": [
+          "research"
+        ],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T18:34:59.272Z",
+        "input": "list my project files",
+        "topics": [
+          "personal",
+          "files"
+        ],
+        "actions": [
+          "listFiles"
+        ]
+      },
+      {
+        "timestamp": "2026-05-07T18:36:16.169Z",
+        "input": "show my github repo info",
+        "topics": [
+          "research",
+          "personal",
+          "github"
+        ],
+        "actions": [
+          "readFile"
+        ]
+      },
+      {
+        "timestamp": "2026-05-07T18:36:26.696Z",
+        "input": "read the file package.json",
+        "topics": [
+          "files"
+        ],
+        "actions": [
+          "readFile"
+        ]
+      },
+      {
+        "timestamp": "2026-05-07T18:49:56.354Z",
+        "input": "what is my life score",
+        "topics": [
+          "productivity",
+          "research",
+          "personal"
+        ],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T18:51:36.737Z",
+        "input": "good morning",
+        "topics": [],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T18:51:39.284Z",
+        "input": "show me Nvidia stock",
+        "topics": [
+          "stocks",
+          "research"
+        ],
+        "actions": [
+          "readFile"
+        ]
+      },
+      {
+        "timestamp": "2026-05-07T18:51:40.990Z",
+        "input": "read the file package.json",
+        "topics": [
+          "files"
+        ],
+        "actions": [
+          "readFile"
+        ]
+      }
+    ],
+    "learnedFacts": [],
+    "fileCache": {}
+  },
+  "stats": {
+    "totalInteractions": 10,
+    "lastActive": "2026-05-07T18:51:40.990Z",
+    "commandsRun": 0
+  }
+}
