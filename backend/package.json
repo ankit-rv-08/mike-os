@@ -8,9 +8,15 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@octokit/rest": "^22.0.1",
+    "better-sqlite3": "^12.9.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "groq-sdk": "^1.1.2",
     "node-fetch": "^3.3.2",
-    "openai": "^6.36.0"
+    "open": "^11.0.0",
+    "openai": "^6.36.0",
+    "zod": "^4.4.3"
   }
 }
