@@ -8,10 +8,14 @@ const { getRepoInfo, searchRepos, getRecentCommits } = require('./githubService'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ─── MEMORY SYSTEM ─────────────────────────────────────────────────────────
+// ─── MEMORY SYSTEM (Vercel-safe: uses /tmp in production) ─────────────────
 class MemorySystem {
   constructor() {
-    this.memoryPath = path.join(__dirname, '..', '..', 'data', 'mike_memory.json');
+    const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
+    this.memoryPath = isVercel 
+      ? '/tmp/mike_memory.json'
+      : path.join(__dirname, '..', '..', 'data', 'mike_memory.json');
+    
     this.memory = {
       user: {
         name: "Ankith RV",
@@ -37,7 +41,8 @@ class MemorySystem {
 
   async init() {
     try {
-      await fs.mkdir(path.dirname(this.memoryPath), { recursive: true });
+      const dir = path.dirname(this.memoryPath);
+      await fs.mkdir(dir, { recursive: true }).catch(() => {});
       const data = await fs.readFile(this.memoryPath, 'utf8');
       this.memory = { ...this.memory, ...JSON.parse(data) };
     } catch {
@@ -47,7 +52,13 @@ class MemorySystem {
   }
 
   async save() {
-    await fs.writeFile(this.memoryPath, JSON.stringify(this.memory, null, 2));
+    try {
+      const dir = path.dirname(this.memoryPath);
+      await fs.mkdir(dir, { recursive: true }).catch(() => {});
+      await fs.writeFile(this.memoryPath, JSON.stringify(this.memory, null, 2));
+    } catch (err) {
+      console.error('Memory save failed:', err.message);
+    }
   }
 
   async learn(input, response, context = {}) {
@@ -208,7 +219,7 @@ async function askGroqFast(input, conversationHistory = []) {
     {
       role: "system",
       content: `You are MIKE, a sharp personal AI assistant inside MIKE OS. 
-You can help with: tasks, files, quick answers, project info.
+You help with: creating tasks, logging health data, checking progress, quick answers. 
 Keep responses short and action-oriented. User is Ankith.
 You have access to his files and projects.
 Never say you're an AI. You are MIKE.`
@@ -299,7 +310,6 @@ RESPONSE STYLE:
 async function processMessage(input, conversationHistory = []) {
   if (!memory.initialized) await memory.init();
 
-  // Check for commands first
   const command = parseCommand(input);
   let commandResult = null;
 
@@ -369,18 +379,16 @@ async function processMessage(input, conversationHistory = []) {
           break;
       }
     } catch (error) {
-      console.error('Command error:', error);
+      console.error('Command error:', error.message);
       commandResult = { error: error.message };
     }
   }
 
-  // Analyze the query
   const analysis = analyzeQuery(input);
   let stockData = null;
   let news = null;
   let webResults = null;
 
-  // Fetch relevant data
   if (analysis.topics.includes('stocks') || analysis.needsSearch) {
     const symbol = extractStockSymbol(input);
     if (symbol) stockData = await getStockData(symbol);
@@ -392,7 +400,6 @@ async function processMessage(input, conversationHistory = []) {
       searchWeb(input)
     ]);
     
-    // Try quick fact lookup for specific questions
     if (!webResults?.abstract && (input.toLowerCase().startsWith('what is') || input.toLowerCase().startsWith('who is'))) {
       const factQuery = input.replace(/^(what|who) is /i, '').trim();
       const fact = await quickFact(factQuery);
@@ -409,7 +416,6 @@ async function processMessage(input, conversationHistory = []) {
 
   const memoryContext = memory.getContext();
 
-  // Merge command results with context
   const context = {
     stockData,
     news,
@@ -418,7 +424,6 @@ async function processMessage(input, conversationHistory = []) {
     ...commandResult
   };
 
-  // Route to appropriate brain
   let response;
   if (analysis.isComplex || command.isCommand) {
     response = await askGroqSmart(input, conversationHistory, context);
@@ -426,7 +431,6 @@ async function processMessage(input, conversationHistory = []) {
     response = await askGroqFast(input, conversationHistory);
   }
 
-  // Learn from interaction
   await memory.learn(input, response, {
     topics: analysis.topics,
     actions: command.isCommand ? [command.action] : []
