@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Mic2, StopCircle, Volume2, Radio, ChevronDown, Check } from 'lucide-react';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -36,6 +36,7 @@ export default function VoicePage() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState('');
   const [hasInteracted, setHasInteracted] = useState(false);
+  const stateRef = useRef<VoiceState>('idle');
 
   const currentVoice = VOICE_OPTIONS.find(v => v.id === selectedAccent)!;
 
@@ -101,10 +102,6 @@ export default function VoicePage() {
   const speak = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    if (window.speechSynthesis.suspended) {
-      window.speechSynthesis.resume();
-    }
-    
     window.speechSynthesis.cancel();
     
     setTimeout(() => {
@@ -117,11 +114,18 @@ export default function VoicePage() {
       const voice = getBestVoice();
       if (voice) utterance.voice = voice;
       
-      utterance.onstart = () => setState('speaking');
-      utterance.onend = () => setState('idle');
+      utterance.onstart = () => {
+        setState('speaking');
+        stateRef.current = 'speaking';
+      };
+      utterance.onend = () => {
+        setState('idle');
+        stateRef.current = 'idle';
+      };
       utterance.onerror = () => {
         setError('Click the microphone button first to enable audio');
         setState('idle');
+        stateRef.current = 'idle';
       };
       
       window.speechSynthesis.speak(utterance);
@@ -130,6 +134,7 @@ export default function VoicePage() {
 
   const processCommand = async (input: string) => {
     setState('processing');
+    stateRef.current = 'processing';
     try {
       const res = await fetch(`${API_BASE}/api/voice-command`, {
         method: 'POST',
@@ -150,9 +155,10 @@ export default function VoicePage() {
   const handleMicClick = () => {
     setHasInteracted(true);
     
-    if (state === 'listening' || state === 'speaking' || state === 'processing') {
+    if (stateRef.current === 'listening' || stateRef.current === 'speaking' || stateRef.current === 'processing') {
       window.speechSynthesis?.cancel();
       setState('idle');
+      stateRef.current = 'idle';
       return;
     }
 
@@ -166,6 +172,7 @@ export default function VoicePage() {
     }
 
     setState('listening');
+    stateRef.current = 'listening';
     const recognition = new SpeechRecognitionApi();
     recognition.lang = currentVoice.lang;
     recognition.interimResults = false;
@@ -178,16 +185,21 @@ export default function VoicePage() {
       } else {
         setError('No speech detected. Try again.');
         setState('idle');
+        stateRef.current = 'idle';
       }
     };
 
     recognition.onerror = () => {
       setError('Microphone access denied. Please allow microphone permissions.');
       setState('idle');
+      stateRef.current = 'idle';
     };
 
     recognition.onend = () => {
-      if (state === 'listening') setState('processing');
+      if (stateRef.current === 'listening') {
+        setState('processing');
+        stateRef.current = 'processing';
+      }
     };
 
     recognition.start();
@@ -318,7 +330,7 @@ export default function VoicePage() {
           {state === 'idle' || state === 'processing' ? <Mic2 className="w-8 h-8 text-accent" /> : <StopCircle className="w-8 h-8 text-white" />}
         </button>
         {state !== 'idle' && (
-          <button onClick={() => { window.speechSynthesis?.cancel(); setState('idle'); }} className="px-6 py-2.5 rounded-lg glass-panel border border-border/50 text-foreground hover:text-accent transition-all duration-300 text-sm">
+          <button onClick={() => { window.speechSynthesis?.cancel(); setState('idle'); stateRef.current = 'idle'; }} className="px-6 py-2.5 rounded-lg glass-panel border border-border/50 text-foreground hover:text-accent transition-all duration-300 text-sm">
             Cancel
           </button>
         )}
