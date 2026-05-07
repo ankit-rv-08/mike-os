@@ -1,199 +1,197 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Settings2, Plus } from 'lucide-react';
+import { TrendingUp, Settings2, Loader2 } from 'lucide-react';
 
-const chartData = [
-  { time: '9:00', price: 48200 },
-  { time: '10:00', price: 48500 },
-  { time: '11:00', price: 48100 },
-  { time: '12:00', price: 48800 },
-  { time: '13:00', price: 49200 },
-  { time: '14:00', price: 48900 },
-  { time: '15:00', price: 49500 },
-  { time: '16:00', price: 49100 },
-];
-
-const watchlist = [
-  { symbol: 'BTC', name: 'Bitcoin', price: 49234, change: 2.3, type: 'crypto' },
-  { symbol: 'ETH', name: 'Ethereum', price: 3248, change: 1.8, type: 'crypto' },
-  { symbol: 'AAPL', name: 'Apple', price: 192.45, change: 0.5, type: 'stock' },
-  { symbol: 'TSLA', name: 'Tesla', price: 242.18, change: -1.2, type: 'stock' },
-];
-
-const timeframes = ['1M', '5M', '15M', '1H', '4H', '1D', '1W'];
+interface StockData {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  type: string;
+}
 
 export default function TradingPage() {
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
-  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USD');
+  const [selectedSymbol, setSelectedSymbol] = useState('NVDA');
+  const [watchlist, setWatchlist] = useState<StockData[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const timeframes = ['1M', '5M', '15M', '1H', '4H', '1D', '1W'];
+
+  useEffect(() => {
+    const fetchMarketData = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/command`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: 'show me stock market data for NVDA AAPL TSLA MSFT', source: 'trading' }),
+        });
+        const data = await res.json();
+        
+        // Try to get real stock data from response
+        if (data?.stockData) {
+          setWatchlist([{
+            symbol: data.stockData.symbol || 'NVDA',
+            name: 'Nvidia',
+            price: parseFloat(data.stockData.price) || 0,
+            change: parseFloat(data.stockData.change) || 0,
+            type: 'stock',
+          }]);
+        }
+      } catch {
+        // Fallback: try direct stock endpoint
+        try {
+          const res = await fetch(`${API_BASE}/api/stocks/NVDA`);
+          const data = await res.json();
+          if (data?.price) {
+            setWatchlist([{
+              symbol: 'NVDA', name: 'Nvidia', price: data.price,
+              change: data.change || 0, type: 'stock',
+            }]);
+          }
+        } catch {}
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMarketData();
+  }, [API_BASE]);
+
+  // Generate chart data from watchlist
+  useEffect(() => {
+    if (watchlist.length > 0) {
+      const basePrice = watchlist[0].price;
+      const points = ['9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+      const chart = points.map((time, i) => ({
+        time,
+        price: basePrice + (Math.sin(i * 0.5) * basePrice * 0.02),
+      }));
+      setChartData(chart);
+    }
+  }, [watchlist]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading market data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-glow mb-2">Trading</h1>
-          <p className="text-muted-foreground">Real-time market analysis and trading tools</p>
+          <p className="text-muted-foreground">Real-time market analysis powered by MIKE</p>
         </div>
-        <button className="p-3 rounded-lg bg-card/40 border border-border/30 text-muted-foreground hover:text-accent transition-all duration-300 hover:neon-glow">
+        <button className="p-3 rounded-lg bg-card/40 border border-border/30 text-muted-foreground hover:text-accent transition-all duration-300">
           <Settings2 className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Chart Area */}
-        <div className="lg:col-span-3 flex flex-col gap-6">
-          {/* Chart Toolbar */}
-          <div className="glass-panel p-4 flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">{selectedSymbol}</h2>
-              <p className="text-sm text-muted-foreground">Price Chart</p>
-            </div>
-
-            {/* Timeframe Buttons */}
-            <div className="flex gap-2 p-1 bg-card/40 rounded-lg border border-border/30">
-              {timeframes.map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setSelectedTimeframe(tf)}
-                  className={`
-                    px-3 py-1.5 rounded text-xs font-medium transition-all duration-300
-                    ${
-                      selectedTimeframe === tf
-                        ? 'bg-accent/30 text-accent border border-accent/50 neon-glow'
-                        : 'text-muted-foreground hover:text-foreground border border-transparent'
-                    }
-                  `}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Chart */}
-          <div className="glass-panel p-8 hover-glow">
-            <ResponsiveContainer width="100%" height={400}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="rgb(100, 200, 255)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="rgb(100, 200, 255)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 200, 255, 0.1)" />
-                <XAxis dataKey="time" stroke="rgb(100, 150, 200)" />
-                <YAxis stroke="rgb(100, 150, 200)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    border: '1px solid rgba(100, 200, 255, 0.3)',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="price"
-                  stroke="rgb(100, 200, 255)"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorPrice)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Indicators Section */}
-          <div className="glass-panel p-6">
-            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-accent" />
-              Technical Indicators
-            </h3>
-
-            <div className="space-y-3">
-              {[
-                { name: 'RSI (14)', value: '65.2', status: 'overbought' },
-                { name: 'MACD', value: 'Bullish', status: 'positive' },
-                { name: 'Moving Avg (50)', value: '48,450', status: 'above' },
-                { name: 'Bollinger Bands', value: 'Mid', status: 'neutral' },
-              ].map((indicator) => (
-                <div key={indicator.name} className="flex items-center justify-between p-3 bg-card/30 rounded-lg border border-border/20">
-                  <span className="text-sm text-foreground">{indicator.name}</span>
-                  <div className="text-right">
-                    <p className="text-sm font-mono text-accent">{indicator.value}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{indicator.status}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {watchlist.length === 0 ? (
+        <div className="glass-panel p-12 text-center">
+          <TrendingUp className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No market data yet</h3>
+          <p className="text-muted-foreground">
+            Ask MIKE: "Show me Nvidia stock" or "What's the market doing today?"
+          </p>
         </div>
-
-        {/* Right Sidebar */}
-        <div className="flex flex-col gap-6">
-          {/* Watchlist */}
-          <div className="glass-panel p-6 hover-glow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-foreground">Watchlist</h3>
-              <button className="p-1 rounded hover:bg-card/50 transition-colors">
-                <Plus className="w-4 h-4 text-accent" />
-              </button>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            <div className="glass-panel p-4 flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">{selectedSymbol}</h2>
+                <p className="text-sm text-muted-foreground">
+                  ${watchlist[0]?.price?.toFixed(2)} 
+                  <span className={watchlist[0]?.change >= 0 ? 'text-green-400 ml-2' : 'text-red-400 ml-2'}>
+                    {watchlist[0]?.change >= 0 ? '+' : ''}{watchlist[0]?.change}%
+                  </span>
+                </p>
+              </div>
+              <div className="flex gap-2 p-1 bg-card/40 rounded-lg border border-border/30">
+                {timeframes.map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setSelectedTimeframe(tf)}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      selectedTimeframe === tf
+                        ? 'bg-accent/30 text-accent border border-accent/50'
+                        : 'text-muted-foreground hover:text-foreground border border-transparent'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            <div className="glass-panel p-8">
+              <ResponsiveContainer width="100%" height={400}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#64c8ff" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#64c8ff" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="time" stroke="rgba(255,255,255,0.3)" />
+                  <YAxis stroke="rgba(255,255,255,0.3)" />
+                  <Tooltip
+                    contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(100,200,255,0.3)', borderRadius: '8px' }}
+                  />
+                  <Area type="monotone" dataKey="price" stroke="#64c8ff" fill="url(#colorPrice)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Watchlist */}
+          <div className="glass-panel p-6">
+            <h3 className="text-lg font-semibold mb-4">Watchlist</h3>
             <div className="space-y-3">
               {watchlist.map((item) => (
                 <div
                   key={item.symbol}
-                  onClick={() => setSelectedSymbol(`${item.symbol}/USD`)}
-                  className={`
-                    p-4 rounded-lg cursor-pointer transition-all duration-300
-                    ${
-                      selectedSymbol === `${item.symbol}/USD`
-                        ? 'bg-accent/20 border border-accent/50 neon-glow'
-                        : 'bg-card/30 border border-border/20 hover:border-border/50'
-                    }
-                  `}
+                  onClick={() => setSelectedSymbol(item.symbol)}
+                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                    selectedSymbol === item.symbol
+                      ? 'bg-accent/20 border border-accent/50'
+                      : 'bg-card/30 border border-border/30 hover:border-accent/30'
+                  }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-foreground">{item.symbol}</span>
-                    <span className={`text-xs ${item.change > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {item.change > 0 ? '+' : ''}{item.change}%
-                    </span>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm">{item.symbol}</p>
+                      <p className="text-xs text-muted-foreground">{item.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">${item.price?.toFixed(2)}</p>
+                      <p className={`text-xs ${item.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {item.change >= 0 ? '+' : ''}{item.change}%
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{item.name}</p>
-                  <p className="text-sm font-mono text-foreground mt-1">${item.price.toLocaleString()}</p>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Market Overview */}
-          <div className="glass-panel p-6 hover-glow">
-            <h3 className="font-semibold text-foreground mb-4">Market Status</h3>
-
-            <div className="space-y-3">
-              {[
-                { name: 'Volatility', value: 'Medium', color: 'bg-yellow-500/20' },
-                { name: 'Trend', value: 'Bullish', color: 'bg-green-500/20' },
-                { name: 'Volume', value: 'High', color: 'bg-blue-500/20' },
-              ].map((item) => (
-                <div key={item.name} className={`p-3 rounded-lg border border-border/20 ${item.color}`}>
-                  <p className="text-xs text-muted-foreground">{item.name}</p>
-                  <p className="text-sm font-semibold text-foreground">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Trading Info */}
-          <div className="glass-panel p-6">
-            <h3 className="font-semibold text-foreground mb-3 text-sm">Portfolio Value</h3>
-            <p className="text-2xl font-bold text-accent mb-1">$125,432.50</p>
-            <p className="text-sm text-green-400">+4.2% Today</p>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              Ask MIKE to track more stocks
+            </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
