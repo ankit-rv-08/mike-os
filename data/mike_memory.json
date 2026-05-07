@@ -107,14 +107,38 @@
         "actions": [
           "readFile"
         ]
+      },
+      {
+        "timestamp": "2026-05-07T19:13:36.043Z",
+        "input": "Create a task: review DSA for 1 hour",
+        "topics": [
+          "files"
+        ],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T19:13:38.322Z",
+        "input": "Create a task: build MIKE OS voice feature",
+        "topics": [
+          "files"
+        ],
+        "actions": []
+      },
+      {
+        "timestamp": "2026-05-07T19:13:40.499Z",
+        "input": "log health: sleep 7 hours, water 2 liters, focus 3 hours",
+        "topics": [
+          "productivity"
+        ],
+        "actions": []
       }
     ],
     "learnedFacts": [],
     "fileCache": {}
   },
   "stats": {
-    "totalInteractions": 10,
-    "lastActive": "2026-05-07T18:51:40.990Z",
+    "totalInteractions": 13,
+    "lastActive": "2026-05-07T19:13:40.499Z",
     "commandsRun": 0
   }
 }
