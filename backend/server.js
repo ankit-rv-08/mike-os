@@ -5,21 +5,20 @@ const cors = require("cors");
 
 const commandRoutes = require("./routes/command-routes");
 const voiceRoutes = require("./routes/voice-routes");
+const calendarRoutes = require("./routes/calendar-routes");
 
 const app = express();
 
-// Simple CORS
 app.use(cors());
 app.use(express.json());
 
-// health check
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, status: "online" });
 });
 
-// routes
 app.use("/api", commandRoutes);
 app.use("/api", voiceRoutes);
+app.use("/api", calendarRoutes);
 
 module.exports = app;
 
