@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/sidebar';
+import { Sidebar } from '@/components/sidebar';
 import "./globals.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Responsive Sidebar - Hidden on mobile, HUD-style on desktop */}
           {!isMobile && (
             <motion.div initial={{ x: -100 }} animate={{ x: 0 }} className="w-72">
-              <Sidebar className="h-full hud-panel border-cyan-500/40" />
+              <Sidebar />
             </motion.div>
           )}
 
