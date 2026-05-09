@@ -1,8 +1,8 @@
 'use client';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import Orb from '@/components/Orb';
-import CommandBar from '@/components/CommandBar';
+import Orb from './components/Orb';
+import CommandBar from './components/CommandBar';
 import { 
   Zap, Brain, Target, Activity, 
   TrendingUp, Terminal, Cpu, Network, 
