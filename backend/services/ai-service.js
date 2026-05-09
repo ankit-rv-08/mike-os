@@ -2,138 +2,69 @@ require("dotenv").config();
 const Groq = require("groq-sdk");
 const fs = require('fs').promises;
 const path = require('path');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const TASKS_FILE = path.join(__dirname, '../../data/tasks.json');
+const CALENDAR_FILE = path.join(__dirname, '../../data/calendar.json');
 
-// ─── TOOL 1: WEB SEARCH ──────────────────────────────────────────────────────
-async function performWebSearch(query) {
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey || apiKey.includes('your_')) return null;
-
-  console.log(`[MIKE] Searching the web for: "${query}"...`);
+async function checkGitHubActivity() {
+  const token = process.env.GITHUB_TOKEN;
+  const username = "ankit-rv-08"; 
+  if (!token || token.includes('your_')) return "Token missing.";
   try {
-    const response = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: apiKey, query: query, search_depth: "basic", include_answer: true })
+    const response = await fetch(`https://api.github.com/users/${username}/events/public`, {
+      headers: { "Authorization": `token ${token}`, "User-Agent": "MIKE-OS" }
     });
-    const data = await response.json();
-    return data.answer || "Search completed.";
-  } catch (err) {
-    return null;
-  }
+    if (!response.ok) return "GitHub Auth Failed. Token might be expired.";
+    const events = await response.json();
+    const today = new Date().toISOString().split('T')[0];
+    const todaysPushes = events.filter(e => e.type === 'PushEvent' && e.created_at.startsWith(today));
+    return todaysPushes.length > 0 ? `Push count today: ${todaysPushes.length}` : "No commits found for today.";
+  } catch (err) { return "GitHub API Error."; }
 }
 
-// ─── TOOL 2: TASK EXECUTION ──────────────────────────────────────────────────
-async function manageTask(intent, taskName = "") {
+async function manageData(type, intent, text = "") {
+  const FILE = type === 'task' ? TASKS_FILE : CALENDAR_FILE;
   try {
-    let tasks = [];
-    
-    // 1. Safely read the file, creating it if it doesn't exist
-    try {
-      const data = await fs.readFile(TASKS_FILE, 'utf8');
-      if (data.trim() !== "") {
-        tasks = JSON.parse(data);
-      }
-    } catch (readError) {
-      // If file doesn't exist, we just start with an empty array.
-      if (readError.code !== 'ENOENT') {
-        console.error("[MIKE] Error reading tasks:", readError);
-      }
-    }
+    await fs.mkdir(path.dirname(FILE), { recursive: true });
+    let items = [];
+    try { items = JSON.parse(await fs.readFile(FILE, 'utf8')); } catch (e) {}
 
     if (intent === 'create') {
-      // Clean up the task name string (sometimes the LLM includes quotes)
-      const cleanTaskName = taskName.replace(/^["']|["']$/g, '').trim();
-      
-      const newTask = { 
-        id: Date.now(), 
-        name: cleanTaskName, 
-        status: 'pending', 
-        date: new Date().toISOString() 
-      };
-      
-      tasks.push(newTask);
-      
-      // Save the updated array back to the file
-      await fs.writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
-      console.log(`[MIKE] Task created: ${cleanTaskName}`);
-      return `Task "${cleanTaskName}" has been successfully added to the system database.`;
+      items.push({ id: Date.now(), title: text, type: type === 'task' ? 'task' : 'meeting', status: 'pending', start_time: new Date().toISOString() });
+      await fs.writeFile(FILE, JSON.stringify(items, null, 2));
+      return `Added to ${type}s.`;
     }
-    
-    if (intent === 'read') {
-      if (tasks.length === 0) return "There are no pending tasks in the system.";
-      // Format the output so MIKE can read it easily
-      const taskList = tasks.map((t, index) => `${index + 1}. [${t.status.toUpperCase()}] ${t.name}`).join('\n');
-      return "Current tasks in database:\n" + taskList;
-    }
-  } catch (error) {
-    console.error("[MIKE] Task System Critical Error:", error);
-    return "System Error: Failed to access or modify task database.";
-  }
+  } catch (error) { return "File error."; }
 }
-// ─── ROUTER & INTENT ENGINE ──────────────────────────────────────────────────
-async function processMessage(input, conversationHistory = []) {
-  let systemContent = `You are MIKE, an elite personal AI advisor inside MIKE OS.
-ABOUT ANKITH: 3rd year EEE student at NITK Surathkal, Tech Lead at HUDRA. Goal: 15 LPA software job in Bangalore by Dec 2026.
-YOUR STYLE: Direct, intelligent, mentor-like. Be concise. Never say you are an AI. You are MIKE.`;
 
+async function processMessage(input, conversationHistory = []) {
+  let systemContent = `You are MIKE, Ankith's elite JARVIS OS. Be direct.`;
   let activeBrain = "groq-70b";
   let contextData = "";
-
   const lowerInput = input.toLowerCase();
 
-  // 1. Detect Web Search Intent
-  if (lowerInput.match(/news|latest|today|happening|current|price|stock|market/)) {
-    const searchResult = await performWebSearch(input);
-    if (searchContext) {
-      contextData += `\n\n[LIVE WEB DATA]:\n${searchResult}`;
-      activeBrain = "groq-70b + web-search";
-    }
-  }
-
-  // 2. Detect Task Creation Intent
-  if (lowerInput.match(/create a task|remind me to|add task|new task/)) {
-    // Extract everything after the keyword roughly
-    const taskText = input.replace(/create a task|remind me to|add task|new task/i, '').trim();
-    const taskResult = await manageTask('create', taskText);
-    contextData += `\n\n[SYSTEM ACTION TAKEN]:\n${taskResult}`;
-    activeBrain = "groq-70b + execution";
-  }
-
-  // 3. Detect Task Reading Intent
-  if (lowerInput.match(/what are my tasks|show tasks|pending tasks/)) {
-    const taskResult = await manageTask('read');
-    contextData += `\n\n[SYSTEM DATA - PENDING TASKS]:\n${taskResult}`;
-    activeBrain = "groq-70b + execution";
-  }
-
-  if (contextData) {
-    systemContent += `\n\nUse the following system context to answer the user appropriately:${contextData}`;
-  }
-
-  // Execute Neural Processing
   try {
+    if (lowerInput.match(/github|commit/)) {
+      const git = await checkGitHubActivity();
+      contextData += `\n[GITHUB]: ${git}`;
+      activeBrain = "groq + github";
+    }
+    if (lowerInput.match(/task|schedule|meeting/)) {
+      const res = await manageData(lowerInput.includes('task') ? 'task' : 'calendar', 'create', input);
+      contextData += `\n[ACTION]: ${res}`;
+      activeBrain = "groq + execution";
+    }
+
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: systemContent },
-        ...conversationHistory.slice(-6),
-        { role: "user", content: input }
-      ],
-      max_tokens: 1024,
-      temperature: 0.7,
+      messages: [{ role: "system", content: systemContent + contextData }, ...conversationHistory.slice(-6), { role: "user", content: input }],
+      max_tokens: 500,
     });
 
-    return { 
-      response: completion.choices[0]?.message?.content, 
-      brain: activeBrain,
-      stockData: null 
-    };
+    return { response: completion.choices[0]?.message?.content, brain: activeBrain };
   } catch (error) {
-    return { response: "⚠️ Neural link unstable.", brain: "error" };
+    return { response: "Neural link error.", brain: "error" };
   }
 }
 
