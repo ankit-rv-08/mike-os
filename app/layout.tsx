@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { Sidebar } from '@/components/sidebar';
+import Sidebar from "@/components/sidebar";
 import "./globals.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
