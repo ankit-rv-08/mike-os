@@ -1,15 +1,26 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Mic, Activity, Radio, Volume2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Mic, Radio, Volume2, ChevronDown, Settings2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const VOICE_PROFILES = [
+  { id: 'british-male', label: 'British Male' },
+  { id: 'british-female', label: 'British Female' },
+  { id: 'american-male', label: 'American Male' },
+  { id: 'american-female', label: 'American Female' },
+  { id: 'european-male', label: 'European Male' },
+  { id: 'european-female', label: 'European Female' },
+  { id: 'russian-male', label: 'Russian Male' },
+  { id: 'japanese-male', label: 'Japanese Male' },
+];
 
 export default function VoicePage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
-  const voicesLoaded = useRef(false);
+  const [voiceProfile, setVoiceProfile] = useState('british-male');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Jarvis-style personalized greetings
   const greetings = [
     "Voice protocols initialized. Awaiting your command, Ankith.",
     "Neural link active. What is our primary objective today?",
@@ -18,30 +29,57 @@ export default function VoicePage() {
     "Audio interface secure. Ready when you are."
   ];
 
-  const speak = (text: string) => {
+  // Helper function to smartly find the right voice based on OS
+  const getSelectedVoice = (voices: SpeechSynthesisVoice[], profile: string) => {
+    const isMale = (v: SpeechSynthesisVoice) => 
+      v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark') || v.name.toLowerCase().includes('arthur');
+    const isFemale = (v: SpeechSynthesisVoice) => 
+      v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('victoria');
+
+    let match;
+    switch(profile) {
+      case 'british-male':
+        match = voices.find(v => v.lang.includes('en-GB') && isMale(v)) || voices.find(v => v.lang.includes('en-GB'));
+        break;
+      case 'british-female':
+        match = voices.find(v => v.lang.includes('en-GB') && isFemale(v)) || voices.find(v => v.lang.includes('en-GB'));
+        break;
+      case 'american-male':
+        match = voices.find(v => v.lang.includes('en-US') && isMale(v)) || voices.find(v => v.lang.includes('en-US'));
+        break;
+      case 'american-female':
+        match = voices.find(v => v.lang.includes('en-US') && isFemale(v)) || voices.find(v => v.lang.includes('en-US'));
+        break;
+      case 'european-male': // Using French/German for European accent
+        match = voices.find(v => (v.lang.includes('fr-') || v.lang.includes('de-')) && isMale(v)) || voices.find(v => v.lang.includes('fr-') || v.lang.includes('de-'));
+        break;
+      case 'european-female':
+        match = voices.find(v => (v.lang.includes('fr-') || v.lang.includes('de-')) && isFemale(v)) || voices.find(v => v.lang.includes('fr-') || v.lang.includes('de-'));
+        break;
+      case 'russian-male':
+        match = voices.find(v => v.lang.includes('ru-') && isMale(v)) || voices.find(v => v.lang.includes('ru-'));
+        break;
+      case 'japanese-male':
+        match = voices.find(v => v.lang.includes('ja-') && isMale(v)) || voices.find(v => v.lang.includes('ja-'));
+        break;
+    }
+    return match || voices[0]; // Fallback to system default if not found
+  };
+
+  const speak = (text: string, forceProfile?: string) => {
     if (!window.speechSynthesis) return;
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Tweak to make it sound more like an AI/Jarvis
     utterance.pitch = 0.9; 
     utterance.rate = 1.0;
 
-    // Fetch available voices
     const voices = window.speechSynthesis.getVoices();
+    const voiceToUse = getSelectedVoice(voices, forceProfile || voiceProfile);
     
-    // Try to find a British Male voice (e.g., 'Google UK English Male', 'Daniel', etc.)
-    const britishVoice = 
-      voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male')) || 
-      voices.find(v => v.name.toLowerCase().includes('google uk english male')) ||
-      voices.find(v => v.lang === 'en-GB') || 
-      voices[0]; // Fallback to whatever is default
-
-    if (britishVoice) {
-      utterance.voice = britishVoice;
+    if (voiceToUse) {
+      utterance.voice = voiceToUse;
     }
 
     utterance.onstart = () => setIsSpeaking(true);
@@ -51,7 +89,6 @@ export default function VoicePage() {
   };
 
   useEffect(() => {
-    // Browsers load voices asynchronously. We need to wait for them.
     const loadVoicesAndGreet = () => {
       if (!hasGreeted) {
         const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
@@ -66,15 +103,21 @@ export default function VoicePage() {
       window.speechSynthesis.onvoiceschanged = loadVoicesAndGreet;
     }
 
-    // Cleanup on unmount
     return () => {
       window.speechSynthesis.cancel();
     };
-  }, [hasGreeted]);
+  }, [hasGreeted]); // Removed 'greetings' from dependency array
 
   const handleManualTrigger = () => {
     const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
     speak(randomGreeting);
+  };
+
+  const handleVoiceChange = (id: string) => {
+    setVoiceProfile(id);
+    setIsDropdownOpen(false);
+    // Give immediate feedback in the new voice
+    speak("Voice profile updated. Systems nominal.", id);
   };
 
   return (
@@ -82,6 +125,43 @@ export default function VoicePage() {
       
       {/* Background glow when speaking */}
       <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.15)_0%,_transparent_50%)] transition-opacity duration-700 ${isSpeaking ? 'opacity-100' : 'opacity-0'}`} />
+
+      {/* Settings Dropdown (Top Right) */}
+      <div className="absolute top-6 right-6 z-50">
+        <div className="relative">
+          <button 
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex items-center gap-2 px-4 py-2 bg-black/40 border border-white/10 hover:border-white/20 rounded-lg text-xs font-mono text-zinc-300 transition-colors backdrop-blur-md"
+          >
+            <Settings2 size={14} className="text-cyan-400" />
+            {VOICE_PROFILES.find(v => v.id === voiceProfile)?.label}
+            <ChevronDown size={14} className={`transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          <AnimatePresence>
+            {isDropdownOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute right-0 mt-2 w-48 bg-[#09090b] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1"
+              >
+                {VOICE_PROFILES.map((profile) => (
+                  <button
+                    key={profile.id}
+                    onClick={() => handleVoiceChange(profile.id)}
+                    className={`w-full text-left px-4 py-2 text-xs font-mono hover:bg-white/5 transition-colors ${
+                      voiceProfile === profile.id ? 'text-cyan-400 bg-white/5' : 'text-zinc-400'
+                    }`}
+                  >
+                    {profile.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
 
       <div className="relative z-10 flex flex-col items-center">
         
@@ -99,7 +179,6 @@ export default function VoicePage() {
 
         {/* Central Voice UI */}
         <div className="relative flex items-center justify-center w-64 h-64 mb-12">
-          {/* Ripple effects when speaking */}
           {isSpeaking && (
             <>
               <motion.div 
@@ -131,7 +210,7 @@ export default function VoicePage() {
           </button>
         </div>
 
-        {/* Visualizer bars (aesthetic) */}
+        {/* Visualizer bars */}
         <div className="flex items-center gap-1 h-12">
           {[...Array(12)].map((_, i) => (
             <motion.div
