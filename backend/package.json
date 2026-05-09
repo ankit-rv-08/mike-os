@@ -10,12 +10,16 @@
     "@google/generative-ai": "^0.24.1",
     "@mistralai/mistralai": "^2.2.1",
     "@octokit/rest": "^22.0.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "framer-motion": "^12.38.0",
     "groq-sdk": "^1.1.2",
     "node-fetch": "^3.3.2",
     "open": "^11.0.0",
+    "three": "^0.184.0",
     "zod": "^4.4.3"
   }
 }
