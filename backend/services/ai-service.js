@@ -1,110 +1,140 @@
 require("dotenv").config();
 const Groq = require("groq-sdk");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { Redis } = require("@upstash/redis");
+const fs = require('fs').promises;
+const path = require('path');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-// Initialize Brains and Memory
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+const TASKS_FILE = path.join(__dirname, '../../data/tasks.json');
 
-// Master System Prompt
-const SYSTEM_PROMPT = `You are MIKE, an autonomous AI operating system. You are Ankith's JARVIS.
-ABOUT ANKITH: 3rd year EEE student at NITK Surathkal. Tech Lead at HUDRA. Goal: 15 LPA software job in Bangalore by Dec 2026.
-YOUR CAPABILITIES: Expert in DSA, system design, full-stack, and personal productivity.
-YOUR STYLE: Direct, concise, action-oriented. Talk like a sharp mentor. NEVER say "I'm an AI". You are MIKE.`;
+// ─── TOOL 1: WEB SEARCH ──────────────────────────────────────────────────────
+async function performWebSearch(query) {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey || apiKey.includes('your_')) return null;
 
-// ─── ROUTER LOGIC ─────────────────────────────────────────────
-function requiresDeepThinking(input) {
-  const complexKeywords = ['plan', 'analyze', 'strategy', 'code', 'debug', 'explain', 'why', 'research', 'dsa', 'system design'];
-  const lowerInput = input.toLowerCase();
-  return complexKeywords.some(kw => lowerInput.includes(kw));
-}
-
-// ─── MEMORY MANAGEMENT ─────────────────────────────────────────
-async function getMemory(sessionId) {
+  console.log(`[MIKE] Searching the web for: "${query}"...`);
   try {
-    const memory = await redis.lrange(`session:${sessionId}`, 0, 9); // Get last 10 messages
-    return memory ? memory.reverse() : [];
-  } catch (error) {
-    console.error("Memory retrieval failed:", error);
-    return [];
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey, query: query, search_depth: "basic", include_answer: true })
+    });
+    const data = await response.json();
+    return data.answer || "Search completed.";
+  } catch (err) {
+    return null;
   }
 }
 
-async function saveToMemory(sessionId, role, content) {
+// ─── TOOL 2: TASK EXECUTION ──────────────────────────────────────────────────
+async function manageTask(intent, taskName = "") {
   try {
-    await redis.lpush(`session:${sessionId}`, JSON.stringify({ role, content }));
-    await redis.ltrim(`session:${sessionId}`, 0, 19); // Keep only last 20 messages to save space
-  } catch (error) {
-    console.error("Memory save failed:", error);
-  }
-}
+    let tasks = [];
+    
+    // 1. Safely read the file, creating it if it doesn't exist
+    try {
+      const data = await fs.readFile(TASKS_FILE, 'utf8');
+      if (data.trim() !== "") {
+        tasks = JSON.parse(data);
+      }
+    } catch (readError) {
+      // If file doesn't exist, we just start with an empty array.
+      if (readError.code !== 'ENOENT') {
+        console.error("[MIKE] Error reading tasks:", readError);
+      }
+    }
 
-// ─── GROQ (FAST BRAIN) ─────────────────────────────────────────
-async function askGroq(input, history) {
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    ...history.map(msg => (typeof msg === 'string' ? JSON.parse(msg) : msg)),
-    { role: "user", content: input }
-  ];
-
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages,
-    max_tokens: 500,
-    temperature: 0.7,
-  });
-  return completion.choices[0]?.message?.content || "Command executed.";
-}
-
-// ─── GEMINI (DEEP BRAIN) ───────────────────────────────────────
-async function askGemini(input, history) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-  
-  let formattedHistory = history
-    .map(msg => typeof msg === 'string' ? JSON.parse(msg) : msg)
-    .map(msg => `${msg.role === 'user' ? 'Ankith' : 'MIKE'}: ${msg.content}`)
-    .join('\n');
-
-  const fullPrompt = `${SYSTEM_PROMPT}\n\nRecent context:\n${formattedHistory}\n\nAnkith: ${input}\nMIKE:`;
-  
-  const result = await model.generateContent(fullPrompt);
-  return result.response.text();
-}
-
-// ─── MAIN ENTRY POINT ─────────────────────────────────────────
-async function processMessage(input, sessionId = "default") {
-  // 1. Fetch past memory
-  const history = await getMemory(sessionId);
-
-  // 2. Route to the right brain
-  const isComplex = requiresDeepThinking(input);
-  let responseText = "";
-  let activeBrain = "";
-
-  try {
-    if (isComplex) {
-      responseText = await askGemini(input, history);
-      activeBrain = "gemini";
-    } else {
-      responseText = await askGroq(input, history);
-      activeBrain = "groq";
+    if (intent === 'create') {
+      // Clean up the task name string (sometimes the LLM includes quotes)
+      const cleanTaskName = taskName.replace(/^["']|["']$/g, '').trim();
+      
+      const newTask = { 
+        id: Date.now(), 
+        name: cleanTaskName, 
+        status: 'pending', 
+        date: new Date().toISOString() 
+      };
+      
+      tasks.push(newTask);
+      
+      // Save the updated array back to the file
+      await fs.writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
+      console.log(`[MIKE] Task created: ${cleanTaskName}`);
+      return `Task "${cleanTaskName}" has been successfully added to the system database.`;
+    }
+    
+    if (intent === 'read') {
+      if (tasks.length === 0) return "There are no pending tasks in the system.";
+      // Format the output so MIKE can read it easily
+      const taskList = tasks.map((t, index) => `${index + 1}. [${t.status.toUpperCase()}] ${t.name}`).join('\n');
+      return "Current tasks in database:\n" + taskList;
     }
   } catch (error) {
-    console.error(`Error with ${activeBrain}:`, error);
-    responseText = "⚠️ Neural link interrupted. Retrying with backup systems...";
-    activeBrain = "error";
+    console.error("[MIKE] Task System Critical Error:", error);
+    return "System Error: Failed to access or modify task database.";
+  }
+}
+// ─── ROUTER & INTENT ENGINE ──────────────────────────────────────────────────
+async function processMessage(input, conversationHistory = []) {
+  let systemContent = `You are MIKE, an elite personal AI advisor inside MIKE OS.
+ABOUT ANKITH: 3rd year EEE student at NITK Surathkal, Tech Lead at HUDRA. Goal: 15 LPA software job in Bangalore by Dec 2026.
+YOUR STYLE: Direct, intelligent, mentor-like. Be concise. Never say you are an AI. You are MIKE.`;
+
+  let activeBrain = "groq-70b";
+  let contextData = "";
+
+  const lowerInput = input.toLowerCase();
+
+  // 1. Detect Web Search Intent
+  if (lowerInput.match(/news|latest|today|happening|current|price|stock|market/)) {
+    const searchResult = await performWebSearch(input);
+    if (searchContext) {
+      contextData += `\n\n[LIVE WEB DATA]:\n${searchResult}`;
+      activeBrain = "groq-70b + web-search";
+    }
   }
 
-  // 3. Save new interaction to memory
-  await saveToMemory(sessionId, "user", input);
-  await saveToMemory(sessionId, "assistant", responseText);
+  // 2. Detect Task Creation Intent
+  if (lowerInput.match(/create a task|remind me to|add task|new task/)) {
+    // Extract everything after the keyword roughly
+    const taskText = input.replace(/create a task|remind me to|add task|new task/i, '').trim();
+    const taskResult = await manageTask('create', taskText);
+    contextData += `\n\n[SYSTEM ACTION TAKEN]:\n${taskResult}`;
+    activeBrain = "groq-70b + execution";
+  }
 
-  return { response: responseText, brain: activeBrain };
+  // 3. Detect Task Reading Intent
+  if (lowerInput.match(/what are my tasks|show tasks|pending tasks/)) {
+    const taskResult = await manageTask('read');
+    contextData += `\n\n[SYSTEM DATA - PENDING TASKS]:\n${taskResult}`;
+    activeBrain = "groq-70b + execution";
+  }
+
+  if (contextData) {
+    systemContent += `\n\nUse the following system context to answer the user appropriately:${contextData}`;
+  }
+
+  // Execute Neural Processing
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemContent },
+        ...conversationHistory.slice(-6),
+        { role: "user", content: input }
+      ],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    return { 
+      response: completion.choices[0]?.message?.content, 
+      brain: activeBrain,
+      stockData: null 
+    };
+  } catch (error) {
+    return { response: "⚠️ Neural link unstable.", brain: "error" };
+  }
 }
 
 module.exports = { processMessage };
