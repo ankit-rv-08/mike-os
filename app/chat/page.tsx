@@ -10,9 +10,7 @@ interface Message {
 }
 
 export default function ChatPage() {
-  const API_BASE =
-    process.env.NEXT_PUBLIC_BACKEND_URL ??
-    'https://mike-os-backend.vercel.app';
+  const API_BASE = 'http://localhost:8787';
 
   const [messages, setMessages] = useState<Message[]>([
     {
