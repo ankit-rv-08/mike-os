@@ -1,54 +1,59 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { Sidebar } from '@/components/sidebar'
-import { TopBar } from '@/components/topbar'
-import { ModeProvider } from '@/lib/mode-context'
-import './globals.css'
+'use client';
+import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import Sidebar from '@/components/sidebar';
+import "./globals.css";
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const [isMobile, setIsMobile] = useState(false);
 
-export const metadata: Metadata = {
-  title: 'MIKE OS - Premium AI Operating System',
-  description: 'Experience the future of AI-powered productivity',
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
-}
+  useEffect(() => {
+    const checkSize = () => setIsMobile(window.innerWidth < 1024);
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
   return (
-    <html lang="en" className="bg-background dark">
-      <body className="font-sans antialiased bg-background text-foreground transition-colors duration-500">
-        <ModeProvider>
-          <Sidebar />
-          <TopBar />
-          <main className="ml-72 mt-20 p-8 min-h-screen transition-all duration-500">
-            {children}
+    <html lang="en">
+      <body className="antialiased bg-black overflow-hidden select-none">
+        <div className="scanline" />
+        
+        {/* Global Grid Overlay */}
+        <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--neon-blue)_0%,_transparent_1px)] bg-[length:40px_40px] opacity-10" />
+
+        <div className="flex h-screen w-screen p-2 lg:p-6 gap-4">
+          {/* Responsive Sidebar - Hidden on mobile, HUD-style on desktop */}
+          {!isMobile && (
+            <motion.div initial={{ x: -100 }} animate={{ x: 0 }} className="w-72">
+              <Sidebar className="h-full hud-panel border-cyan-500/40" />
+            </motion.div>
+          )}
+
+          <main className="flex-1 hud-panel relative overflow-hidden flex flex-col">
+            <header className="p-4 border-b border-cyan-500/20 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
+                <span className="text-xs uppercase tracking-widest text-cyan-400 font-bold">System Online // MIKE OS v2.0</span>
+              </div>
+              <div className="text-[10px] text-cyan-500/50 uppercase tracking-tighter">
+                NITK_SRK_GRID_SECURED
+              </div>
+            </header>
+            
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              {children}
+            </div>
+
+            {/* Mobile Bottom HUD - Only shows on Small screens */}
+            {isMobile && (
+              <footer className="h-16 border-t border-cyan-500/20 bg-black/80 backdrop-blur-xl flex items-center justify-around px-4">
+                {/* Mobile Icons go here */}
+              </footer>
+            )}
           </main>
-          {process.env.NODE_ENV === 'production' && <Analytics />}
-        </ModeProvider>
+        </div>
       </body>
     </html>
-  )
+  );
 }
