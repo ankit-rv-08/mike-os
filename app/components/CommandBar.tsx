@@ -1,40 +1,26 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { Command } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export default function CommandBar() {
-  const [open, setState] = useState(false);
-  const [input, setInput] = useState("");
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setState((open) => !open);
-      }
-    };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, []);
-
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-blue-500/30 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center p-4 border-b border-white/10">
-          <Command className="text-blue-400 mr-3" size={20} />
-          <input 
-            autoFocus
-            placeholder="Execute system command..."
-            className="bg-transparent border-none outline-none text-white w-full text-lg"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-        </div>
-        <div className="p-2 text-xs text-gray-500 bg-black/20 flex justify-between">
-          <span>Commands: "analyze stock", "check dsa", "update memory"</span>
-          <span>ESC to close</span>
+    <div className="w-full max-w-2xl mx-auto mb-10 relative group z-20">
+      {/* Background neon blur */}
+      <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-2xl blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+      
+      {/* Input container */}
+      <div className="relative flex items-center bg-black/60 border border-white/10 backdrop-blur-md rounded-2xl p-2 px-4 shadow-2xl transition-all duration-300 group-hover:border-white/20">
+        <Search className="text-cyan-500 mr-3" size={20} />
+        
+        <input 
+          type="text" 
+          placeholder="Initiate command sequence..." 
+          className="w-full bg-transparent border-none text-white focus:outline-none font-mono text-sm placeholder:text-zinc-600"
+        />
+        
+        {/* Keyboard shortcut UI */}
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-mono ml-4 shrink-0">
+          <span className="bg-white/10 px-2 py-1 rounded border border-white/5 shadow-inner">⌘</span>
+          <span className="bg-white/10 px-2 py-1 rounded border border-white/5 shadow-inner">K</span>
         </div>
       </div>
     </div>
