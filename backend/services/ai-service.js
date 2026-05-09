@@ -6,16 +6,26 @@ const path = require('path');
 // ─── MEMORY SYSTEM (Vercel-safe) ───────────────────────────────────────────
 class MemorySystem {
   constructor() {
-    const isProduction = process.env.NODE_ENV === 'production';
-    this.memoryPath = isProduction ? '/tmp/mike_memory.json' : path.join(__dirname, '../../data/memory.json');
-    this.memory = { user: { name: "Ankith RV", goals: ["15 LPA Bangalore"] }, history: [] };
+    this.memory = { 
+      user: { 
+        name: "Ankith RV", 
+        role: "Technical Partner @ HUDRA", 
+        target: "15 LPA Bangalore",
+        stack: ["Django", "React", "AWS", "Azure"]
+      }, 
+      history: [] 
+    };
+    this.initialized = false;
   }
 
   async init() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    this.memoryPath = isProduction ? '/tmp/mike_memory.json' : path.join(__dirname, '../../data/memory.json');
     try {
       const data = await fs.readFile(this.memoryPath, 'utf8');
       this.memory = JSON.parse(data);
     } catch { await this.save(); }
+    this.initialized = true;
   }
 
   async save() {
@@ -27,45 +37,45 @@ class MemorySystem {
 
 const memory = new MemorySystem();
 
-// ─── COMMAND PARSER ────────────────────────────────────────────────────────
-function parseIntent(input) {
-  const lower = input.toLowerCase();
-  if (lower.includes("read file")) return "FILE_OPERATIONS";
-  if (lower.includes("analyze") || lower.includes("stock")) return "STRATEGIC_RESEARCH";
-  if (lower.includes("code") || lower.includes("dsa")) return "ENGINEERING_LOGIC";
-  return "GENERAL_REFLEX";
-}
-
 // ─── MAIN PROCESSOR ────────────────────────────────────────────────────────
 async function processMessage(input, conversationHistory = []) {
   if (!memory.initialized) await memory.init();
 
-  const intent = parseIntent(input);
-  
+  // Step 1: Detect specific commands (File operations / HUDRA specific)
+  const isCareerQuery = /job|placement|resume|interview|lpa/i.test(input);
+  const isFileQuery = /read file|check code/i.test(input);
+
   try {
-    // Firing the Master Brain (Groq/Gemini/Mistral Failover)
+    // Step 2: Fire the Master Brain Failover logic
+    // This calls backend/brains/master-brain.js which manages Groq/Gemini/Mistral
     const result = await executeTask(input, conversationHistory);
 
-    // Contextual Memory Update
-    this.memory?.history?.push({ q: input, a: result.text, t: Date.now() });
-    if (this.memory?.history?.length > 50) this.memory.history.shift();
+    // Step 3: Learn from interaction (Update memory)
+    memory.memory.history.push({ q: input, t: Date.now() });
+    if (memory.memory.history.length > 50) memory.memory.history.shift();
     await memory.save();
 
+    // Step 4: Add JARVIS personality suffix based on the brain used
+    const brainTag = result.source === "Mistral Fail-safe" ? " [!!! CODESTRAL_ACTIVE]" : ` [${result.source}]`;
+
     return {
-      response: result.text,
+      response: result.text + brainTag,
       brain: result.source,
-      intent: intent,
+      memoryContext: memory.memory.user,
       timestamp: new Date().toISOString()
     };
   } catch (error) {
     console.error("Neural Link Error:", error);
-    return { response: "Ankith, the link is dropping. Switching to local fail-safe...", brain: "LOCAL" };
+    return { 
+      response: "Ankith, Gemini and Groq links are unstable. Mistral fail-safe engaged: System requires manual check.", 
+      brain: "FAILOVER" 
+    };
   }
 }
 
 async function generateInsight({ lifeScore }) {
-  if (lifeScore > 80) return "Momentum optimal. Execute DSA sets now.";
-  return "System recovery required. Prioritize sleep/focus protocols.";
+  if (lifeScore > 85) return "Ankith, performance is Alpha. Reviewing Bangalore SDE openings...";
+  return "System optimization required. Focus on DSA sets.";
 }
 
 module.exports = { processMessage, generateInsight };
