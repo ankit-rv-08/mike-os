@@ -1,70 +1,156 @@
 require("dotenv").config();
 const Groq = require("groq-sdk");
-const fs = require('fs').promises;
-const path = require('path');
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const TASKS_FILE = path.join(__dirname, '../../data/tasks.json');
-const CALENDAR_FILE = path.join(__dirname, '../../data/calendar.json');
 
-async function checkGitHubActivity() {
-  const token = process.env.GITHUB_TOKEN;
-  const username = "ankit-rv-08"; 
-  if (!token || token.includes('your_')) return "Token missing.";
-  try {
-    const response = await fetch(`https://api.github.com/users/${username}/events/public`, {
-      headers: { "Authorization": `token ${token}`, "User-Agent": "MIKE-OS" }
-    });
-    if (!response.ok) return "GitHub Auth Failed. Token might be expired.";
-    const events = await response.json();
-    const today = new Date().toISOString().split('T')[0];
-    const todaysPushes = events.filter(e => e.type === 'PushEvent' && e.created_at.startsWith(today));
-    return todaysPushes.length > 0 ? `Push count today: ${todaysPushes.length}` : "No commits found for today.";
-  } catch (err) { return "GitHub API Error."; }
+// ─── ROUTER LOGIC ─────────────────────────────────────────────────────────────
+function isComplexQuery(input) {
+  const complexKeywords = ['stock', 'invest', 'market', 'crypto', 'portfolio', 'advice', 'plan', 'strategy', 'optimize'];
+  return complexKeywords.some(kw => input.toLowerCase().includes(kw));
 }
 
-async function manageData(type, intent, text = "") {
-  const FILE = type === 'task' ? TASKS_FILE : CALENDAR_FILE;
-  try {
-    await fs.mkdir(path.dirname(FILE), { recursive: true });
-    let items = [];
-    try { items = JSON.parse(await fs.readFile(FILE, 'utf8')); } catch (e) {}
-
-    if (intent === 'create') {
-      items.push({ id: Date.now(), title: text, type: type === 'task' ? 'task' : 'meeting', status: 'pending', start_time: new Date().toISOString() });
-      await fs.writeFile(FILE, JSON.stringify(items, null, 2));
-      return `Added to ${type}s.`;
-    }
-  } catch (error) { return "File error."; }
+function needsWebSearch(input) {
+  const searchKeywords = ['news', 'latest', 'today', 'happening', 'who won', 'weather', 'current', 'update', 'search for'];
+  return searchKeywords.some(kw => input.toLowerCase().includes(kw));
 }
 
-async function processMessage(input, conversationHistory = []) {
-  let systemContent = `You are MIKE, Ankith's elite JARVIS OS. Be direct.`;
-  let activeBrain = "groq-70b";
-  let contextData = "";
-  const lowerInput = input.toLowerCase();
+// ─── TOOLS ────────────────────────────────────────────────────────────────────
+async function searchWeb(query) {
+  const key = process.env.SERPER_API_KEY;
+  if (!key || key === 'your_serper_key_here') return null;
 
   try {
-    if (lowerInput.match(/github|commit/)) {
-      const git = await checkGitHubActivity();
-      contextData += `\n[GITHUB]: ${git}`;
-      activeBrain = "groq + github";
-    }
-    if (lowerInput.match(/task|schedule|meeting/)) {
-      const res = await manageData(lowerInput.includes('task') ? 'task' : 'calendar', 'create', input);
-      contextData += `\n[ACTION]: ${res}`;
-      activeBrain = "groq + execution";
-    }
-
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: systemContent + contextData }, ...conversationHistory.slice(-6), { role: "user", content: input }],
-      max_tokens: 500,
+    const fetch = (await import('node-fetch')).default;
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": key,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ q: query })
     });
-
-    return { response: completion.choices[0]?.message?.content, brain: activeBrain };
+    const data = await res.json();
+    
+    // Extract top 3 organic search results
+    if (data.organic && data.organic.length > 0) {
+      return data.organic.slice(0, 3).map(r => `Title: ${r.title}\nInfo: ${r.snippet}`).join('\n\n');
+    }
+    return "No relevant search results found.";
   } catch (error) {
-    return { response: "Neural link error.", brain: "error" };
+    console.error("Serper API error:", error);
+    return null;
+  }
+}
+
+async function getStockData(symbol) {
+  const key = process.env.ALPHA_VANTAGE_KEY;
+  if (!key || key === 'your_alpha_vantage_key_here') return null;
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${key}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const quote = data['Global Quote'];
+    if (!quote || !quote['05. price']) return null;
+    return {
+      symbol: quote['01. symbol'],
+      price: parseFloat(quote['05. price']).toFixed(2),
+      change: parseFloat(quote['09. % change']).toFixed(2),
+      high: parseFloat(quote['03. high']).toFixed(2),
+      low: parseFloat(quote['04. low']).toFixed(2),
+      volume: parseInt(quote['06. volume']).toLocaleString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function extractStockSymbol(input) {
+  const knownStocks = {
+    'nvidia': 'NVDA', 'apple': 'AAPL', 'microsoft': 'MSFT', 'google': 'GOOGL', 
+    'amazon': 'AMZN', 'tesla': 'TSLA', 'meta': 'META', 'tata': 'TCS.BSE', 'infosys': 'INFY'
+  };
+  const lower = input.toLowerCase();
+  for (const [name, symbol] of Object.entries(knownStocks)) {
+    if (lower.includes(name)) return symbol;
+  }
+  const tickerMatch = input.match(/\b[A-Z]{2,5}\b/);
+  return tickerMatch ? tickerMatch[0] : null;
+}
+
+// ─── AI MODELS ────────────────────────────────────────────────────────────────
+async function askGroq(input, conversationHistory = []) {
+  const messages = [
+    {
+      role: "system",
+      content: `You are MIKE, an autonomous personal AI system. Keep responses short and action-oriented. You are talking to Ankith.`
+    },
+    ...conversationHistory.slice(-6),
+    { role: "user", content: input }
+  ];
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages,
+    max_tokens: 512,
+    temperature: 0.7,
+  });
+  return completion.choices[0]?.message?.content || "Done.";
+}
+
+async function askGroqPro(input, conversationHistory = [], context = {}) {
+  let systemContent = `You are MIKE, an elite personal AI advisor inside MIKE OS.
+You specialize in: market education, web research, deep strategy, and life optimization.
+User: Ankith RV, 3rd year EEE student at NITK, developer, and founder.
+Style: Teach like a mentor. Be direct and intelligent. Never say you're an AI. You are MIKE.`;
+
+  // Inject Live Search Context
+  if (context.searchData) {
+    systemContent += `\n\nLIVE WEB SEARCH RESULTS:\n${context.searchData}\nUse this real-time information to answer the user accurately. Cite the news briefly.`;
+  }
+
+  // Inject Stock Context
+  if (context.stockData) {
+    systemContent += `\n\nREAL-TIME STOCK DATA:\nSymbol: ${context.stockData.symbol}\nPrice: $${context.stockData.price}\nChange Today: ${context.stockData.change}%`;
+  }
+
+  const messages = [
+    { role: "system", content: systemContent },
+    ...conversationHistory.slice(-6),
+    { role: "user", content: input }
+  ];
+  
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages,
+    max_tokens: 1024,
+    temperature: 0.7,
+  });
+  return completion.choices[0]?.message?.content || "Let me think about that.";
+}
+
+// ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
+async function processMessage(input, conversationHistory = []) {
+  let stockData = null;
+  let searchData = null;
+
+  // ROUTE 1: Needs Live Internet Data
+  if (needsWebSearch(input)) {
+    searchData = await searchWeb(input);
+    const response = await askGroqPro(input, conversationHistory, { searchData });
+    return { response, brain: 'groq-70b (Web Search)', searchData, stockData: null };
+  } 
+  
+  // ROUTE 2: Needs Complex Reasoning or Stock Data
+  else if (isComplexQuery(input)) {
+    const symbol = extractStockSymbol(input);
+    if (symbol) stockData = await getStockData(symbol);
+    const response = await askGroqPro(input, conversationHistory, { stockData });
+    return { response, brain: 'groq-70b (Deep Intel)', searchData: null, stockData };
+  } 
+  
+  // ROUTE 3: Simple, fast tasks
+  else {
+    const response = await askGroq(input, conversationHistory);
+    return { response, brain: 'groq-8b (Fast Engine)', searchData: null, stockData: null };
   }
 }
 
