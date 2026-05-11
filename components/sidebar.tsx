@@ -1,95 +1,55 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  Brain,
-  Cog,
-  Heart,
-  TrendingUp,
-  CheckSquare,
-  Calendar,
-  Newspaper,
-  BarChart3,
-  Mic,
-  HelpCircle,
-  MessageSquare,
-  Settings,
-} from 'lucide-react'
+import { Brain, Cog, Heart, TrendingUp, CheckSquare, Calendar, Newspaper, BarChart3, Mic, HelpCircle, MessageSquare, Settings, Bell } from 'lucide-react'
+import { useTheme } from './theme-provider'
 
 const navItems = [
-  { icon: Brain, label: 'NEURAL' },
-  { icon: Cog, label: 'CORE' },
-  { icon: Heart, label: 'VITALS' },
-  { icon: TrendingUp, label: 'CAPITAL' },
-  { icon: CheckSquare, label: 'EXECUTION' },
-  { icon: Calendar, label: 'CALENDAR' },
-  { icon: Newspaper, label: 'NEWS' },
-  { icon: BarChart3, label: 'TRADING' },
-  { icon: Mic, label: 'VOICE' },
+  { icon: Brain, label: 'NEURAL' }, { icon: Cog, label: 'CORE' }, { icon: Heart, label: 'VITALS' },
+  { icon: TrendingUp, label: 'CAPITAL' }, { icon: CheckSquare, label: 'EXECUTION' }, { icon: Calendar, label: 'CALENDAR' },
+  { icon: Newspaper, label: 'NEWS' }, { icon: BarChart3, label: 'TRADING' }, { icon: Mic, label: 'VOICE' },
 ]
 
-const bottomItems = [
-  { icon: HelpCircle, label: 'Help' },
-  { icon: MessageSquare, label: 'Feedback' },
-  { icon: Settings, label: 'Settings' },
-]
-
-interface SidebarProps {
-  activeNav: string
-  setActiveNav: (nav: string) => void
-}
+interface SidebarProps { activeNav: string; setActiveNav: (nav: string) => void }
 
 export function Sidebar({ activeNav, setActiveNav }: SidebarProps) {
-  const [showTooltip, setShowTooltip] = useState<string | null>(null)
+  const { mode } = useTheme()
+
+  const getTextAccent = () => {
+    if (mode === 'Focus') return 'text-blue-500'
+    if (mode === 'Deadline') return 'text-orange-500'
+    if (mode === 'Hacker') return 'text-green-500'
+    return 'text-amber-500' 
+  }
+
+  const getThemeAccent = () => {
+    if (mode === 'Focus') return 'text-blue-400 bg-blue-500/20 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]'
+    if (mode === 'Deadline') return 'text-orange-400 bg-orange-500/20 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3)]'
+    if (mode === 'Hacker') return 'text-green-500 bg-green-900/40 border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]'
+    return 'text-amber-400 bg-amber-500/20 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+  }
 
   return (
-    <div className="w-24 bg-slate-950 border-r border-slate-800 p-3 flex flex-col items-center">
-      {/* Header */}
-      <div className="text-xs font-bold text-slate-400 mb-6 text-center tracking-tight" style={{ writingMode: 'vertical-rl' }}>
-        RUN<br/>YOUR<br/>REALITY
+    <div className="w-16 md:w-20 border-r border-[var(--border-color)] flex flex-col items-center py-4 h-full relative z-50 bg-[var(--bg-secondary)] backdrop-blur-md transition-colors duration-500">
+      <div className="flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity mt-2 mb-6 cursor-pointer">
+        <div className={`text-[10px] font-black uppercase tracking-[0.3em] ${getTextAccent()}`}>Run</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Your</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Reality</div>
       </div>
-
-      {/* Main Navigation */}
-      <nav className="space-y-1 flex-1 w-full flex flex-col items-center mt-6">
+      <nav className="space-y-1 flex-1 w-full flex flex-col items-center">
         {navItems.map((item) => {
-          const Icon = item.icon
           const isActive = activeNav === item.label
           return (
-            <button
-              key={item.label}
-              onClick={() => setActiveNav(item.label)}
-              onMouseEnter={() => setShowTooltip(item.label)}
-              onMouseLeave={() => setShowTooltip(null)}
-              title={item.label}
-              className={`relative p-3 rounded-lg transition-all ${
-                isActive
-                  ? 'bg-cyan-500/30 border border-cyan-500 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <Icon size={20} />
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-cyan-400 rounded-r-lg"></div>
-              )}
+            <button key={item.label} onClick={() => setActiveNav(item.label)} title={item.label}
+              className={`relative p-3 rounded-lg transition-all duration-300 ${isActive ? getThemeAccent() : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white border border-transparent'}`}>
+              <item.icon size={20} />
             </button>
           )
         })}
       </nav>
-
-      {/* Bottom Actions */}
-      <div className="space-y-1 pt-4 border-t border-slate-800 w-full flex flex-col items-center">
-        {bottomItems.map((item) => {
-          const Icon = item.icon
-          return (
-            <button
-              key={item.label}
-              className="p-3 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
-              title={item.label}
-            >
-              <Icon size={20} />
-            </button>
-          )
-        })}
+      <div className="space-y-1 pt-4 border-t border-[var(--border-color)] w-full flex flex-col items-center mb-2">
+        <button onClick={() => alert('[SYSTEM] Settings Protocol')} className="p-3 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 transition-all relative"><Settings size={20} /></button>
+        <button onClick={() => alert('[SYSTEM] Help/Docs Protocol')} className="p-3 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 transition-all relative"><HelpCircle size={20} /></button>
       </div>
     </div>
   )

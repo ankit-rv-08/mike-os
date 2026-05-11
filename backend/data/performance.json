@@ -29,6 +29,18 @@
       "date": "2026-05-11",
       "category": "Learning",
       "hours": 0
+    },
+    {
+      "id": "1778521905916",
+      "date": "2026-05-11",
+      "category": "Sleep",
+      "hours": 7
+    },
+    {
+      "id": "1778521922206",
+      "date": "2026-05-11",
+      "category": "Deep Work",
+      "hours": 3
     }
   ],
   "vitals": {
