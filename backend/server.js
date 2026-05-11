@@ -71,4 +71,12 @@ app.post('/api/calendar', (req, res) => {
     res.json({ success: true });
 });
 
+// --- FIX: Alias /api/command to /api/chat ---
+app.post('/api/command', async (req, res) => {
+    // This catches the '404' and routes it to your AI logic
+    const { message, history } = req.body;
+    const result = await processMessage(message, history);
+    res.json(result);
+});
+
 app.listen(PORT, () => console.log(`MIKE OS Backend Active on Port ${PORT}`));
