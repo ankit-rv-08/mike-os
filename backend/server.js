@@ -6,7 +6,17 @@ const fs = require('fs');
 const commandRoutes = require("./routes/command-routes");
 
 const app = express();
-app.use(cors());
+const cors = require('cors');
+
+// Allow both your local environment and your live Vercel site
+app.use(cors({
+    origin: [
+        'http://localhost:3000', 
+        'https://mike-os-frontend.vercel.app' // ADD YOUR EXACT VERCEL URL HERE
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
 app.use(express.json());
 
 // Ensure data directory exists
