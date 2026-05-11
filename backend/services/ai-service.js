@@ -4,6 +4,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
