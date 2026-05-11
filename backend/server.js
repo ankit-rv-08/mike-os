@@ -16,7 +16,7 @@ app.use(express.json());
 app.use(cors({
     origin: [
         'http://localhost:3000',
-        'https://mike-os-frontend.vercel.app' // Your live frontend
+        'https://mike-os-frontend.vercel.app/' // Your live frontend
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
