@@ -1,15 +1,15 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
+const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const commandRoutes = require("./routes/command-routes");
 
 const app = express();
-const cors = require('cors');
+
 
 // Allow both your local environment and your live Vercel site
-app.use(cors({
+app.use(cors({S
     origin: [
         'http://localhost:3000', 
         'https://mike-os-frontend.vercel.app' // ADD YOUR EXACT VERCEL URL HERE
