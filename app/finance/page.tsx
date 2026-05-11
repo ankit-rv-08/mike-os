@@ -1,168 +1,106 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { DollarSign, TrendingUp, Wallet, Target, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Wallet, ArrowUpRight, ArrowDownRight, DollarSign, Plus } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
-const COLORS = ['#64c8ff', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#818cf8'];
-
-interface FinanceData {
-  income: { category: string; amount: number }[];
-  expenses: { category: string; amount: number; percentage: number }[];
-  monthly: { month: string; income: number; expense: number }[];
-  totalIncome: number;
-  totalExpense: number;
-  balance: number;
-  savingsRate: number;
+interface Transaction {
+  id: string;
+  desc: string;
+  amount: number;
+  type: 'in' | 'out';
 }
 
-export default function FinancePage() {
-  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8787';
-  const [data, setData] = useState<FinanceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+export default function CapitalPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [amount, setAmount] = useState('');
+  const [desc, setDesc] = useState('');
+  const [type, setType] = useState<'in'|'out'>('out');
 
   useEffect(() => {
-    const fetchFinanceData = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/finance`);
-        if (res.ok) {
-          const json = await res.json();
-          setData(json.data || json);
-        } else {
-          // Fallback: try getting data from performance endpoint
-          const perfRes = await fetch(`${API_BASE}/api/performance`);
-          if (perfRes.ok) {
-            const perfJson = await perfRes.json();
-            const perf = perfJson.data || perfJson;
-            setData({
-              income: [
-                { category: 'Allowance', amount: perf.income || 5000 },
-                { category: 'Freelance', amount: perf.freelance || 0 },
-                { category: 'Other', amount: perf.otherIncome || 0 },
-              ],
-              expenses: [
-                { category: 'Food', amount: perf.foodExpense || 2000, percentage: 40 },
-                { category: 'Transport', amount: perf.transportExpense || 500, percentage: 10 },
-                { category: 'Entertainment', amount: perf.entertainmentExpense || 500, percentage: 10 },
-                { category: 'Savings', amount: perf.savings || 2000, percentage: 40 },
-              ],
-              monthly: [],
-              totalIncome: (perf.income || 5000) + (perf.freelance || 0),
-              totalExpense: 3000,
-              balance: 2000,
-              savingsRate: 40,
-            });
-          } else {
-            throw new Error('Could not fetch finance data');
-          }
-        }
-      } catch (err) {
-        setError('Finance tracking coming soon. Start logging your expenses!');
-        setData({
-          income: [{ category: 'Add your income', amount: 0 }],
-          expenses: [{ category: 'Add expenses', amount: 0, percentage: 100 }],
-          monthly: [],
-          totalIncome: 0,
-          totalExpense: 0,
-          balance: 0,
-          savingsRate: 0,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    const saved = localStorage.getItem('mike_finance');
+    if (saved) setTransactions(JSON.parse(saved));
+  }, []);
 
-    fetchFinanceData();
-  }, [API_BASE]);
+  useEffect(() => {
+    localStorage.setItem('mike_finance', JSON.stringify(transactions));
+  }, [transactions]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading your finances...</p>
-        </div>
-      </div>
-    );
-  }
+  const addTx = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amount || !desc) return;
+    setTransactions([{ id: Date.now().toString(), desc, amount: parseFloat(amount), type }, ...transactions]);
+    setAmount('');
+    setDesc('');
+  };
 
-  if (!data) return null;
+  const balance = transactions.reduce((acc, curr) => curr.type === 'in' ? acc + curr.amount : acc - curr.amount, 0);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold text-glow mb-2">Finance</h1>
-        <p className="text-muted-foreground">Track income, expenses, and financial goals</p>
-        {error && <p className="text-sm text-yellow-400 mt-2">{error}</p>}
+    <div className="p-6 max-w-5xl mx-auto animate-in fade-in duration-700 text-slate-200">
+      <div className="mb-8 border-b border-slate-800 pb-4 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3 text-white uppercase tracking-widest">
+            <Wallet className="text-yellow-500 animate-pulse" /> Capital_Ledger
+          </h1>
+          <p className="text-cyan-500 font-mono text-xs mt-2 tracking-widest">LIQUIDITY & RESOURCE ALLOCATION</p>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { icon: TrendingUp, label: 'Total Income', value: `₹${data.totalIncome.toLocaleString()}`, color: 'text-green-400' },
-          { icon: Wallet, label: 'Total Expense', value: `₹${data.totalExpense.toLocaleString()}`, color: 'text-red-400' },
-          { icon: DollarSign, label: 'Balance', value: `₹${data.balance.toLocaleString()}`, color: 'text-accent' },
-          { icon: Target, label: 'Savings Rate', value: `${data.savingsRate}%`, color: 'text-blue-400' },
-        ].map((card, idx) => {
-          const Icon = card.icon;
-          return (
-            <div key={idx} className="glass-panel p-6 hover-glow">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{card.label}</h3>
-                <Icon className={`w-5 h-5 ${card.color}`} />
-              </div>
-              <p className={`text-3xl font-bold ${card.color}`}>{card.value}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <Card className="bg-black/60 border-slate-800/80 backdrop-blur-xl md:col-span-2">
+          <CardContent className="p-8 flex items-center justify-between">
+            <div>
+              <p className="font-mono text-xs text-slate-500 tracking-widest mb-2">NET LIQUIDITY</p>
+              <h2 className={`text-5xl font-bold tracking-tight ${balance >= 0 ? 'text-white' : 'text-red-500'}`}>
+                ${balance.toFixed(2)}
+              </h2>
             </div>
-          );
-        })}
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/30">
+              <DollarSign className="w-8 h-8 text-yellow-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/60 border-slate-800/80 backdrop-blur-xl">
+          <CardContent className="p-6">
+            <h3 className="font-mono text-xs text-cyan-400 mb-4 tracking-widest">LOG TRANSACTION</h3>
+            <form onSubmit={addTx} className="space-y-3">
+              <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white" />
+              <div className="flex gap-2">
+                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" className="w-2/3 bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white" />
+                <button type="button" onClick={() => setType(type === 'in' ? 'out' : 'in')} className={`w-1/3 text-xs font-bold rounded flex items-center justify-center ${type === 'in' ? 'bg-green-600/20 text-green-500 border border-green-500' : 'bg-red-600/20 text-red-500 border border-red-500'}`}>
+                  {type === 'in' ? 'INCOME' : 'EXPENSE'}
+                </button>
+              </div>
+              <button type="submit" className="w-full bg-slate-800 hover:bg-slate-700 text-white p-2 rounded text-xs font-mono tracking-widest mt-2 border border-slate-600">CONFIRM</button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Simple message when no data */}
-      {data.totalIncome === 0 && (
-        <div className="glass-panel p-12 text-center">
-          <Wallet className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">No finance data yet</h3>
-          <p className="text-muted-foreground">
-            Ask MIKE to "log my expenses" or "track my income" to get started!
-          </p>
-        </div>
-      )}
-
-      {/* Charts - only show if there's data */}
-      {data.totalIncome > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glass-panel p-8 hover-glow">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Income Breakdown</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={data.income} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="amount">
-                  {data.income.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="glass-panel p-8 hover-glow">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Expense Breakdown</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={data.expenses} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="amount">
-                  {data.expenses.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      <Card className="bg-black/60 border-slate-800/80 backdrop-blur-xl">
+         <CardContent className="p-6">
+           <h3 className="font-mono text-xs text-slate-400 mb-4 tracking-widest">TRANSACTION HISTORY</h3>
+           {transactions.length === 0 ? (
+              <p className="text-center text-slate-600 py-8 font-mono text-xs">NO LEDGER ENTRIES FOUND</p>
+           ) : (
+             <div className="space-y-2">
+               {transactions.map(tx => (
+                 <div key={tx.id} className="flex justify-between items-center bg-slate-900/40 p-3 rounded border border-slate-800">
+                   <div className="flex items-center gap-3">
+                     {tx.type === 'in' ? <ArrowUpRight className="text-green-500 w-4 h-4" /> : <ArrowDownRight className="text-red-500 w-4 h-4" />}
+                     <span className="text-sm font-medium text-white">{tx.desc}</span>
+                   </div>
+                   <span className={`font-mono text-sm font-bold ${tx.type === 'in' ? 'text-green-500' : 'text-white'}`}>
+                     {tx.type === 'in' ? '+' : '-'}${tx.amount.toFixed(2)}
+                   </span>
+                 </div>
+               ))}
+             </div>
+           )}
+         </CardContent>
+      </Card>
     </div>
   );
 }

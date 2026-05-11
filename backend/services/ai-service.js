@@ -128,30 +128,35 @@ Style: Teach like a mentor. Be direct and intelligent. Never say you're an AI. Y
 }
 
 // ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
+// Replace your processMessage function with this Triple-Brain logic
 async function processMessage(input, conversationHistory = []) {
+  const complex = isComplexQuery(input);
   let stockData = null;
-  let searchData = null;
 
-  // ROUTE 1: Needs Live Internet Data
-  if (needsWebSearch(input)) {
-    searchData = await searchWeb(input);
-    const response = await askGroqPro(input, conversationHistory, { searchData });
-    return { response, brain: 'groq-70b (Web Search)', searchData, stockData: null };
-  } 
-  
-  // ROUTE 2: Needs Complex Reasoning or Stock Data
-  else if (isComplexQuery(input)) {
+  if (complex) {
     const symbol = extractStockSymbol(input);
     if (symbol) stockData = await getStockData(symbol);
-    const response = await askGroqPro(input, conversationHistory, { stockData });
-    return { response, brain: 'groq-70b (Deep Intel)', searchData: null, stockData };
-  } 
-  
-  // ROUTE 3: Simple, fast tasks
-  else {
+
+    try {
+      // Brain 1: Try Gemini First (Deep Thinking / Real-time)
+      const response = await askGemini(input, conversationHistory, { stockData });
+      return { response, brain: 'gemini', stockData };
+    } catch (geminiError) {
+      console.error("Gemini failed/rate-limited, falling back to High-IQ Fallback...", geminiError.message);
+      
+      try {
+        // Brain 2: Fallback to Groq 70B or Mistral 
+        // (Assuming askGroqPro is your 70B/Mistral fallback function)
+        const response = await askGroqPro(input, conversationHistory, { stockData });
+        return { response, brain: 'mistral-fallback', stockData };
+      } catch (fallbackError) {
+        return { response: "System overloaded. Both deep cores are currently offline.", brain: 'error', stockData: null };
+      }
+    }
+  } else {
+    // Brain 3: Groq 8B (Lightning fast reflexes for simple tasks)
     const response = await askGroq(input, conversationHistory);
-    return { response, brain: 'groq-8b (Fast Engine)', searchData: null, stockData: null };
+    return { response, brain: 'groq-fast', stockData: null };
   }
 }
-
 module.exports = { processMessage };

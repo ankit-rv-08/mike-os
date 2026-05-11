@@ -3,16 +3,32 @@
     "id": 1778436952763,
     "title": "add a meeting with yale toda",
     "type": "calendar",
-    "status": "pending",
+    "status": "completed",
     "start_time": "2026-05-10T18:15:52.763Z",
-    "completed": false
+    "completed": true
   },
   {
     "id": 1778436985154,
     "title": "task: gym at 7pm",
     "type": "task",
-    "status": "pending",
+    "status": "completed",
     "start_time": "2026-05-10T18:16:25.154Z",
+    "completed": true
+  },
+  {
+    "id": 1778438193256,
+    "title": "task: meeting at 10",
+    "type": "task",
+    "status": "completed",
+    "start_time": "2026-05-10T18:36:33.256Z",
+    "completed": true
+  },
+  {
+    "id": 1778438209745,
+    "title": "event: date with mom",
+    "type": "calendar",
+    "status": "pending",
+    "start_time": "2026-05-10T18:36:49.745Z",
     "completed": false
   }
 ]

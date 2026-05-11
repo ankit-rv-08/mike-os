@@ -50,6 +50,31 @@ router.get("/calendar", (req, res) => {
     res.status(500).json({ error: "Failed to read calendar data" });
   }
 });
+// 👉 NEW: Route to update event status
+router.put("/calendar/:id", (req, res) => {
+  try {
+    const eventId = parseInt(req.params.id);
+    const { status } = req.body; // will be 'pending', 'completed', or 'missed'
+    
+    const events = getEvents();
+    const eventIndex = events.findIndex(e => e.id === eventId);
+    
+    if (eventIndex === -1) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    // Update the status
+    events[eventIndex].status = status;
+    events[eventIndex].completed = (status === 'completed');
+
+    // Save back to file
+    fs.writeFileSync(CALENDAR_FILE, JSON.stringify(events, null, 2));
+    res.json(events[eventIndex]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update event" });
+  }
+});
 
 // Intercept chat commands to add events
 router.post("/command", async (req, res) => {

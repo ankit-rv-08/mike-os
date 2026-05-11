@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Plus, ChevronRight, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, ChevronRight, Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -50,7 +50,13 @@ export default function CalendarPage() {
         event && typeof event === 'object' && event.start_time
       );
 
-      setEvents(validEvents);
+      // Default status to 'pending' if missing
+      const processedEvents = validEvents.map(e => ({
+        ...e,
+        status: e.status || 'pending'
+      }));
+
+      setEvents(processedEvents);
     } catch (error) {
       console.error('Failed to fetch events:', error);
       setEvents([]); 
@@ -63,14 +69,12 @@ export default function CalendarPage() {
     fetchEvents();
   }, []);
 
-  // 👉 ADDED: Function to handle manual button clicks
   const handleAddEvent = async (type: 'task' | 'event') => {
     const title = prompt(`Enter ${type} details (e.g., "Workout at 6PM"):`);
     if (!title) return;
 
     try {
       const API_BASE = 'http://localhost:8787';
-      // Sending it to MIKE's brain so he saves it
       await fetch(`${API_BASE}/api/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,12 +83,29 @@ export default function CalendarPage() {
           sessionId: 'default'
         }),
       });
-      
-      // Refresh events immediately
       fetchEvents();
     } catch (error) {
       console.error('Failed to add event', error);
       alert("MIKE backend is unreachable.");
+    }
+  };
+
+  // 👉 NEW: Function to handle the Dropdown state change
+  const handleStatusChange = async (eventId: number, newStatus: string) => {
+    try {
+      // 1. Optimistic Update (makes the UI feel instant)
+      setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: newStatus } : e));
+      
+      // 2. Send the update to the backend
+      const API_BASE = 'http://localhost:8787';
+      await fetch(`${API_BASE}/api/calendar/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      fetchEvents(); // Revert back if the API call failed
     }
   };
 
@@ -140,7 +161,6 @@ export default function CalendarPage() {
               <p className="text-slate-400 text-sm mt-1">Events and tasks for this timeline</p>
             </div>
             <div className="flex gap-2">
-              {/* 👉 ADDED onClick behaviors */}
               <Button size="sm" variant="outline" className="border-slate-700 hover:bg-slate-800 text-white" onClick={() => handleAddEvent('task')}>
                 <Plus className="w-4 h-4 mr-1" /> Add Task
               </Button>
@@ -169,20 +189,39 @@ export default function CalendarPage() {
                       </div>
                       <div className="w-px h-8 bg-slate-800 mx-2" />
                       <div>
-                        <h4 className="font-semibold text-slate-100 group-hover:text-white">{event.title}</h4>
-                        <div className="flex gap-2 mt-1">
+                        <h4 className={`font-semibold transition-colors ${event.status === 'completed' ? 'text-slate-500 line-through' : 'text-slate-100 group-hover:text-white'}`}>
+                          {event.title}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
                           <Badge variant="secondary" className="bg-slate-800 text-[10px] uppercase tracking-wider text-slate-300 border-slate-700">
                             {event.type}
                           </Badge>
-                          <Badge className="bg-blue-500/10 text-blue-400 border-none text-[10px] uppercase">
-                            {event.status}
-                          </Badge>
+                          
+                          {/* 👉 NEW: Dropdown Status Menu styled like a Badge! */}
+                          <div className="relative">
+                            <select
+                              value={event.status}
+                              onChange={(e) => handleStatusChange(event.id, e.target.value)}
+                              className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border-none outline-none cursor-pointer appearance-none pr-6 ${
+                                event.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                event.status === 'missed' ? 'bg-red-500/20 text-red-400' :
+                                'bg-blue-500/20 text-blue-400' // pending
+                              }`}
+                            >
+                              <option value="pending" className="bg-slate-900 text-blue-400">PENDING</option>
+                              <option value="completed" className="bg-slate-900 text-green-400">COMPLETED</option>
+                              <option value="missed" className="bg-slate-900 text-red-400">MISSED</option>
+                            </select>
+                            <ChevronDown className={`w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none ${
+                                event.status === 'completed' ? 'text-green-400' :
+                                event.status === 'missed' ? 'text-red-400' :
+                                'text-blue-400'
+                            }`} />
+                          </div>
+
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-slate-500 hover:text-white hover:bg-blue-600/20">
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
                   </div>
                 ))
               ) : (
