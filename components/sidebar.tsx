@@ -45,12 +45,12 @@ export function Sidebar({ activeNav, setActiveNav }: SidebarProps) {
   return (
     <div className="w-24 bg-slate-950 border-r border-slate-800 p-3 flex flex-col items-center">
       {/* Header */}
-      <div className="text-xs font-bold text-slate-400 mb-6 text-center tracking-tight writing-vertical">
+      <div className="text-xs font-bold text-slate-400 mb-6 text-center tracking-tight" style={{ writingMode: 'vertical-rl' }}>
         RUN<br/>YOUR<br/>REALITY
       </div>
 
       {/* Main Navigation */}
-      <nav className="space-y-1 flex-1 w-full flex flex-col items-center">
+      <nav className="space-y-1 flex-1 w-full flex flex-col items-center mt-6">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = activeNav === item.label
@@ -94,4 +94,3 @@ export function Sidebar({ activeNav, setActiveNav }: SidebarProps) {
     </div>
   )
 }
-
