@@ -1,0 +1,15 @@
+{
+  "logs": [
+    { "id": "1", "date": "2026-05-05", "category": "Sleep", "hours": 7.5 },
+    { "id": "2", "date": "2026-05-05", "category": "Deep Work", "hours": 4.5 },
+    { "id": "3", "date": "2026-05-06", "category": "Deep Work", "hours": 3.0 },
+    { "id": "4", "date": "2026-05-06", "category": "Learning", "hours": 2.0 },
+    { "id": "5", "date": "2026-05-07", "category": "Gym", "hours": 1.5 },
+    { "id": "6", "date": "2026-05-07", "category": "Deep Work", "hours": 5.0 },
+    { "id": "7", "date": "2026-05-08", "category": "Sleep", "hours": 8.0 },
+    { "id": "8", "date": "2026-05-09", "category": "Admin", "hours": 2.0 },
+    { "id": "9", "date": "2026-05-10", "category": "Deep Work", "hours": 3.5 },
+    { "id": "10", "date": "2026-05-11", "category": "Learning", "hours": 4.0 },
+    { "id": "11", "date": "2026-05-11", "category": "Deep Work", "hours": 2.5 }
+  ]
+}

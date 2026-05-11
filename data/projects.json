@@ -1,0 +1,8 @@
+{
+  "tasks": [
+    { "id": "p1", "title": "Finish MIKE OS Kanban", "desc": "Wire frontend to backend logic", "status": "In Progress", "priority": "High" },
+    { "id": "p2", "title": "HUDRA API Refactor", "desc": "Optimize PostgreSQL queries", "status": "To Do", "priority": "Medium" },
+    { "id": "p3", "title": "Daily DSA Sprint", "desc": "Solve 3 LeetCode Mediums", "status": "To Do", "priority": "High" },
+    { "id": "p4", "title": "Vitals Integration", "desc": "Connected performance logs", "status": "Completed", "priority": "Low" }
+  ]
+}

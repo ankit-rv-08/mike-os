@@ -1,133 +1,184 @@
 'use client'
 
-import { useState } from 'react'
-import { Briefcase, User, GripVertical, CheckCircle2, Circle, Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Clock, CheckCircle2, ChevronRight, Trash2, Layout, AlertCircle, RefreshCw } from 'lucide-react'
 
-type TaskStatus = 'todo' | 'progress' | 'done'
-
-interface Task {
-  id: number
-  title: string
-  priority: 'high' | 'medium' | 'low'
-  assignee: string
-  due: string
-  tags: string[]
+interface Task { 
+  id: string; 
+  title: string; 
+  desc: string; 
+  status: 'To Do' | 'In Progress' | 'Completed'; 
+  priority: 'High' | 'Medium' | 'Low' 
 }
-
-const initialTasks: Record<TaskStatus, Task[]> = {
-  todo: [
-    { id: 1, title: 'Integrate MIKE OS voice recognition engine', priority: 'high', assignee: 'Mike', due: 'May 8', tags: ['AI', 'Voice'] },
-    { id: 2, title: 'Design Finance module dark theme', priority: 'medium', assignee: 'Sarah', due: 'May 10', tags: ['Design', 'UI'] },
-    { id: 3, title: 'Set up automated testing suite', priority: 'low', assignee: 'Dev', due: 'May 15', tags: ['Testing'] },
-    { id: 4, title: 'News feed RSS aggregation pipeline', priority: 'medium', assignee: 'Mike', due: 'May 12', tags: ['Backend', 'News'] },
-  ],
-  progress: [
-    { id: 5, title: 'Trading chart real-time data feed', priority: 'high', assignee: 'Mike', due: 'May 5', tags: ['Trading', 'API'] },
-    { id: 6, title: 'Calendar sync with Google/Apple', priority: 'medium', assignee: 'Sarah', due: 'May 6', tags: ['Calendar', 'Sync'] },
-    { id: 7, title: 'AI chat streaming response handler', priority: 'high', assignee: 'Mike', due: 'May 4', tags: ['AI', 'Chat'] },
-  ],
-  done: [
-    { id: 8, title: 'Dashboard layout & widget system', priority: 'high', assignee: 'Mike', due: 'Apr 28', tags: ['UI', 'Dashboard'] },
-    { id: 9, title: 'Mode switcher system (Normal/Focus/etc)', priority: 'medium', assignee: 'Mike', due: 'Apr 30', tags: ['UI', 'Modes'] },
-    { id: 10, title: 'Sidebar navigation component', priority: 'low', assignee: 'Sarah', due: 'Apr 25', tags: ['UI', 'Nav'] },
-    { id: 11, title: 'Performance heatmap visualization', priority: 'medium', assignee: 'Dev', due: 'May 1', tags: ['Charts', 'UI'] },
-  ],
-}
-
-const columns: { id: TaskStatus; label: string; color: string; border: string }[] = [
-  { id: 'todo', label: 'To Do', color: 'text-yellow-400', border: 'border-yellow-500/50' },
-  { id: 'progress', label: 'In Progress', color: 'text-cyan-400', border: 'border-cyan-500/50' },
-  { id: 'done', label: 'Done', color: 'text-emerald-400', border: 'border-emerald-500/50' },
-]
 
 export function ProjectsView() {
-  const [tasks, setTasks] = useState(initialTasks)
-  const [dragging, setDragging] = useState<{ id: number; from: TaskStatus } | null>(null)
-  const [dragOver, setDragOver] = useState<TaskStatus | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [isAdding, setIsAdding] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8787'
 
-  const handleDragStart = (id: number, from: TaskStatus) => setDragging({ id, from })
+  const fetchTasks = async () => {
+    setIsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/projects`)
+      const contentType = res.headers.get("content-type")
+      
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json()
+        setTasks(data.tasks || [])
+      } else {
+        console.error("Backend returned non-JSON response. Check if server is running.")
+      }
+    } catch (e) {
+      console.error("Connection failed to backend.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  const handleDrop = (to: TaskStatus) => {
-    if (!dragging || dragging.from === to) { setDragging(null); setDragOver(null); return }
-    const task = tasks[dragging.from].find(t => t.id === dragging.id)
-    if (!task) return
-    setTasks(prev => ({
-      ...prev,
-      [dragging.from]: prev[dragging.from].filter(t => t.id !== dragging.id),
-      [to]: [...prev[to], task],
-    }))
-    setDragging(null)
-    setDragOver(null)
+  const saveTasks = async (newTasks: Task[]) => {
+    setTasks(newTasks) // Optimistic UI update
+    try {
+      await fetch(`${API_BASE}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks: newTasks })
+      })
+    } catch (e) {
+      console.error("Failed to save to backend")
+    }
+  }
+
+  useEffect(() => {
+    fetchTasks()
+    const interval = setInterval(fetchTasks, 10000) // Auto-sync every 10s
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+    
+    const newTask: Task = { 
+      id: Date.now().toString(), 
+      title: newTitle.trim(), 
+      desc: 'Manual system entry.', 
+      status: 'To Do', 
+      priority: 'Medium' 
+    }
+    
+    saveTasks([...tasks, newTask])
+    setNewTitle('')
+    setIsAdding(false)
+  }
+
+  const moveTask = (id: string) => {
+    const cycle: Record<string, any> = { 'To Do': 'In Progress', 'In Progress': 'Completed', 'Completed': 'To Do' }
+    const updated = tasks.map(t => t.id === id ? { ...t, status: cycle[t.status] } : t)
+    saveTasks(updated)
+  }
+
+  const deleteTask = (id: string) => {
+    saveTasks(tasks.filter(t => t.id !== id))
+  }
+
+  const Column = ({ title, status }: { title: string, status: Task['status'] }) => {
+    const filtered = tasks.filter(t => t.status === status)
+    return (
+      <div className="flex-1 flex flex-col gap-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 min-h-[550px] backdrop-blur-sm">
+        <div className="flex justify-between items-center mb-2 px-2">
+          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${status === 'In Progress' ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : status === 'Completed' ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-600'}`} />
+            {title}
+          </h3>
+          <span className="text-[10px] font-mono text-slate-600 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50">
+            {filtered.length.toString().padStart(2, '0')}
+          </span>
+        </div>
+
+        <div className="space-y-3 flex-1">
+          {filtered.map(task => (
+            <div key={task.id} className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl shadow-xl group hover:border-cyan-500/50 transition-all duration-300 relative overflow-hidden">
+              <div className="flex justify-between items-start mb-3">
+                <div className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${
+                  task.priority === 'High' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                }`}>
+                  {task.priority}
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => moveTask(task.id)} className="p-1 hover:text-cyan-400 text-slate-500 transition-colors"><ChevronRight size={14}/></button>
+                  <button onClick={() => deleteTask(task.id)} className="p-1 hover:text-red-400 text-slate-500 transition-colors"><Trash2 size={14}/></button>
+                </div>
+              </div>
+              <h4 className="text-sm font-bold text-slate-100 mb-2 leading-tight">{task.title}</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2 font-medium">{task.desc}</p>
+              
+              {/* Decorative progress line for 'In Progress' tasks */}
+              {status === 'In Progress' && <div className="absolute bottom-0 left-0 h-0.5 bg-cyan-500 w-1/3 animate-pulse" />}
+            </div>
+          ))}
+          {filtered.length === 0 && !isLoading && (
+            <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl py-10 opacity-30">
+              <AlertCircle size={20} className="mb-2" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Queue Empty</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300">
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6 shadow-lg flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Briefcase className="text-cyan-400" />
-          <h2 className="text-lg font-bold">MIKE OS — Development Board</h2>
-          <span className="bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded text-xs font-bold">Sprint 3</span>
+    <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-end border-b border-slate-800 pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Layout size={18} className="text-cyan-400" />
+            <h2 className="text-2xl font-black text-white tracking-tighter uppercase">Execution Board</h2>
+          </div>
+          <p className="text-[10px] text-slate-500 font-bold tracking-widest uppercase ml-7">Sprint v2.1 // System Active</p>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex flex-col items-end"><span className="text-emerald-400 font-bold">{tasks.done.length}</span><span className="text-slate-400 text-xs">Done</span></div>
-          <div className="flex flex-col items-end"><span className="text-cyan-400 font-bold">{tasks.progress.length}</span><span className="text-slate-400 text-xs">Progress</span></div>
-          <div className="flex flex-col items-end"><span className="text-slate-400 font-bold">{tasks.todo.length}</span><span className="text-slate-400 text-xs">To Do</span></div>
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={fetchTasks} 
+            className={`p-2 rounded-lg border border-slate-800 text-slate-500 hover:text-cyan-400 transition-all ${isLoading ? 'animate-spin' : ''}`}
+          >
+            <RefreshCw size={16} />
+          </button>
+          <button 
+            onClick={() => setIsAdding(true)} 
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] active:scale-95"
+          >
+            Initiate Task
+          </button>
         </div>
       </div>
 
-      <div className="flex gap-6 flex-1 overflow-x-auto overflow-y-hidden pb-4">
-        {columns.map(col => (
-          <div 
-            key={col.id}
-            className={`min-w-[320px] flex flex-col bg-slate-950/50 rounded-xl border-2 transition-all ${dragOver === col.id ? col.border : 'border-transparent'}`}
-            onDragOver={e => { e.preventDefault(); setDragOver(col.id) }}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={() => handleDrop(col.id)}
-          >
-            <div className={`p-4 border-b-2 ${col.border} flex justify-between items-center bg-slate-900/50 rounded-t-xl`}>
-              <span className={`font-bold ${col.color}`}>{col.label}</span>
-              <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full text-xs font-bold">{tasks[col.id].length}</span>
-            </div>
-            
-            <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-              {tasks[col.id].map(task => (
-                <div 
-                  key={task.id} 
-                  draggable 
-                  onDragStart={() => handleDragStart(task.id, col.id)}
-                  className={`bg-slate-900 border border-slate-800 p-4 rounded-lg cursor-grab active:cursor-grabbing hover:border-slate-600 transition-colors shadow-lg ${dragging?.id === task.id ? 'opacity-50' : ''}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${task.priority === 'high' ? 'bg-red-500/20 text-red-400' : task.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-800 text-slate-300'}`}>
-                      {task.priority}
-                    </span>
-                    <span className="text-xs text-slate-500">{task.due}</span>
-                  </div>
-                  <h4 className={`text-sm font-bold mb-3 ${col.id === 'done' ? 'line-through text-slate-500' : 'text-slate-200'}`}>{task.title}</h4>
-                  
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {task.tags.map(tag => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-400 bg-cyan-500/10">{tag}</span>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-between items-center border-t border-slate-800/60 pt-2">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-950 px-2 py-1 rounded">
-                      <User size={12} /> {task.assignee}
-                    </div>
-                    {col.id === 'done' ? <CheckCircle2 size={14} className="text-emerald-500" /> : <GripVertical size={14} className="text-slate-600" />}
-                  </div>
-                </div>
-              ))}
-              {tasks[col.id].length === 0 && (
-                <div className="h-24 border-2 border-dashed border-slate-800 rounded-lg flex flex-col items-center justify-center text-slate-500">
-                  <Plus size={24} />
-                  <span className="text-xs mt-1">Drop tasks here</span>
-                </div>
-              )}
-            </div>
+      {isAdding && (
+        <form onSubmit={handleAdd} className="bg-slate-900 border border-cyan-500/30 p-6 rounded-2xl animate-in zoom-in-95 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500" />
+          <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-4">New Task Definition</h3>
+          <input 
+            autoFocus
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            placeholder="Enter Task Name..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors mb-4 font-medium"
+          />
+          <div className="flex justify-end gap-4">
+            <button type="button" onClick={() => setIsAdding(false)} className="text-[10px] text-slate-500 font-black uppercase hover:text-white transition-colors">Abort</button>
+            <button type="submit" className="text-[10px] text-cyan-400 font-black uppercase hover:text-cyan-300 transition-colors">Commit to Board</button>
           </div>
-        ))}
+        </form>
+      )}
+
+      <div className="flex gap-6 overflow-x-auto pb-6 custom-scrollbar">
+        <Column title="Backlog" status="To Do" />
+        <Column title="In Execution" status="In Progress" />
+        <Column title="Verified" status="Completed" />
       </div>
     </div>
   )

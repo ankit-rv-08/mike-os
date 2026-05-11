@@ -1,0 +1,81 @@
+{
+  "logs": [
+    {
+      "id": "1",
+      "date": "2026-05-11",
+      "category": "Deep Work",
+      "hours": 2.5
+    },
+    {
+      "id": "2",
+      "date": "2026-05-11",
+      "category": "Learning",
+      "hours": 1.5
+    },
+    {
+      "id": "1778492213827",
+      "date": "2026-05-11",
+      "category": "Gym",
+      "hours": 1
+    },
+    {
+      "id": "1778512622287",
+      "date": "2026-05-11",
+      "category": "Chilling",
+      "hours": 0.5
+    },
+    {
+      "id": "1778513180926",
+      "date": "2026-05-11",
+      "category": "Learning",
+      "hours": 0
+    }
+  ],
+  "vitals": {
+    "water": 2,
+    "calories": 1845,
+    "steps": 8420,
+    "weight": 73,
+    "bodyFat": 12,
+    "muscleMass": 61,
+    "restingHR": 58
+  },
+  "habits": [
+    {
+      "id": "h1",
+      "task": "Morning meditation (10 min)",
+      "cat": "Mindset",
+      "done": true
+    },
+    {
+      "id": "h2",
+      "task": "Cold shower",
+      "cat": "Physique",
+      "done": true
+    },
+    {
+      "id": "h3",
+      "task": "Workout (45 min)",
+      "cat": "Physique",
+      "done": false
+    },
+    {
+      "id": "h4",
+      "task": "Read (30 min)",
+      "cat": "Growth",
+      "done": false
+    },
+    {
+      "id": "h5",
+      "task": "No social media before 10am",
+      "cat": "Focus",
+      "done": false
+    },
+    {
+      "id": "h6",
+      "task": "Journal entry",
+      "cat": "Mindset",
+      "done": false
+    }
+  ]
+}

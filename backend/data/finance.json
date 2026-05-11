@@ -1,0 +1,30 @@
+{
+  "income": [
+    {
+      "id": "1",
+      "source": "Salary",
+      "amount": 85000,
+      "color": "#06b6d4"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "2",
+      "category": "Housing",
+      "amount": 18000,
+      "color": "#ef4444"
+    },
+    {
+      "id": "1778491309596",
+      "category": "groceries",
+      "amount": 4000,
+      "color": "#ef4444"
+    },
+    {
+      "id": "1778491338393",
+      "category": "Coffee",
+      "amount": 50,
+      "color": "#ef4444"
+    }
+  ]
+}

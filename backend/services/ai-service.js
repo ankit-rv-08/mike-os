@@ -1,162 +1,160 @@
 require("dotenv").config();
 const Groq = require("groq-sdk");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fs = require('fs');
+const path = require('path');
+
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ─── ROUTER LOGIC ─────────────────────────────────────────────────────────────
-function isComplexQuery(input) {
-  const complexKeywords = ['stock', 'invest', 'market', 'crypto', 'portfolio', 'advice', 'plan', 'strategy', 'optimize'];
-  return complexKeywords.some(kw => input.toLowerCase().includes(kw));
-}
+const DATA_DIR = path.join(__dirname, '../data');
+const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
+const PERFORMANCE_FILE = path.join(DATA_DIR, 'performance.json');
+const CALENDAR_FILE = path.join(DATA_DIR, 'calendar.json');
+const FINANCE_FILE = path.join(DATA_DIR, 'finance.json');
 
-function needsWebSearch(input) {
-  const searchKeywords = ['news', 'latest', 'today', 'happening', 'who won', 'weather', 'current', 'update', 'search for'];
-  return searchKeywords.some(kw => input.toLowerCase().includes(kw));
-}
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// ─── TOOLS ────────────────────────────────────────────────────────────────────
-async function searchWeb(query) {
-  const key = process.env.SERPER_API_KEY;
-  if (!key || key === 'your_serper_key_here') return null;
-
-  try {
-    const fetch = (await import('node-fetch')).default;
-    const res = await fetch("https://google.serper.dev/search", {
-      method: "POST",
-      headers: {
-        "X-API-KEY": key,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ q: query })
-    });
-    const data = await res.json();
-    
-    // Extract top 3 organic search results
-    if (data.organic && data.organic.length > 0) {
-      return data.organic.slice(0, 3).map(r => `Title: ${r.title}\nInfo: ${r.snippet}`).join('\n\n');
-    }
-    return "No relevant search results found.";
-  } catch (error) {
-    console.error("Serper API error:", error);
-    return null;
+function routeBrain(input) {
+  const lowerInput = input.trim().toLowerCase();
+  if (lowerInput.startsWith('/ghost ') || lowerInput.startsWith('/deep ')) {
+    return { useGemini: true, cleanInput: input.replace(/^\/(ghost|deep)\s+/i, '').trim() };
   }
+  const isLongPrompt = input.split(' ').length > 25; 
+  const complexVerbs = ['analyze', 'compare', 'summarize', 'derive', 'evaluate', 'explain why'];
+  const needsDeepThought = complexVerbs.some(v => lowerInput.includes(v)) || isLongPrompt;
+  return { useGemini: needsDeepThought, cleanInput: input };
 }
 
-async function getStockData(symbol) {
-  const key = process.env.ALPHA_VANTAGE_KEY;
-  if (!key || key === 'your_alpha_vantage_key_here') return null;
-  try {
-    const fetch = (await import('node-fetch')).default;
-    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${key}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const quote = data['Global Quote'];
-    if (!quote || !quote['05. price']) return null;
-    return {
-      symbol: quote['01. symbol'],
-      price: parseFloat(quote['05. price']).toFixed(2),
-      change: parseFloat(quote['09. % change']).toFixed(2),
-      high: parseFloat(quote['03. high']).toFixed(2),
-      low: parseFloat(quote['04. low']).toFixed(2),
-      volume: parseInt(quote['06. volume']).toLocaleString(),
-    };
-  } catch {
-    return null;
-  }
+function getSystemPrompt() {
+  return `You are MIKE, Ankith RV's autonomous AI Operating System.
+Ankith is a 3rd year EEE student at NITK Surathkal and founder of HUDRA.
+
+CRITICAL: To execute system actions, you MUST append these tags at the end of your response:
+1. Projects: [ADD_PROJECT: <Title> | <Description> | <Priority: High/Medium/Low>]
+   Move task: [MOVE_PROJECT: <Task Title> | <New Status: To Do/In Progress/Completed>]
+2. Time Logs: [ADD_PERFORMANCE: <Category> | <Hours>] (Categories: Deep Work, Learning, Gym, Sleep, Chilling, Admin)
+3. Calendar: [ADD_CALENDAR: <Day Number> | <Title>]
+4. Finance: [ADD_EXPENSE: <Amount> | <Category>] or [ADD_INCOME: <Amount> | <Source>]
+
+NEW VITALS & HABITS COMMANDS:
+5. Update Vitals: [UPDATE_VITAL: <water/calories/steps/weight> | <New Total Number>]
+   (Example: User says "I drank 0.5L water, total is now 2.0" -> [UPDATE_VITAL: water | 2.0])
+6. Toggle Habit: [TOGGLE_HABIT: <Habit Name>]
+   (Example: User says "Mark cold shower done" -> [TOGGLE_HABIT: Cold shower])
+
+Never say you are an AI. You are MIKE. Confirm actions clearly.`;
 }
 
-function extractStockSymbol(input) {
-  const knownStocks = {
-    'nvidia': 'NVDA', 'apple': 'AAPL', 'microsoft': 'MSFT', 'google': 'GOOGL', 
-    'amazon': 'AMZN', 'tesla': 'TSLA', 'meta': 'META', 'tata': 'TCS.BSE', 'infosys': 'INFY'
-  };
-  const lower = input.toLowerCase();
-  for (const [name, symbol] of Object.entries(knownStocks)) {
-    if (lower.includes(name)) return symbol;
-  }
-  const tickerMatch = input.match(/\b[A-Z]{2,5}\b/);
-  return tickerMatch ? tickerMatch[0] : null;
-}
-
-// ─── AI MODELS ────────────────────────────────────────────────────────────────
 async function askGroq(input, conversationHistory = []) {
-  const messages = [
-    {
-      role: "system",
-      content: `You are MIKE, an autonomous personal AI system. Keep responses short and action-oriented. You are talking to Ankith.`
-    },
-    ...conversationHistory.slice(-6),
-    { role: "user", content: input }
-  ];
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages,
-    max_tokens: 512,
-    temperature: 0.7,
-  });
+  const messages = [{ role: "system", content: getSystemPrompt() }, ...conversationHistory.slice(-6), { role: "user", content: input }];
+  const completion = await groq.chat.completions.create({ model: "llama-3.3-70b-versatile", messages, max_tokens: 1024, temperature: 0.7 });
   return completion.choices[0]?.message?.content || "Done.";
 }
 
-async function askGroqPro(input, conversationHistory = [], context = {}) {
-  let systemContent = `You are MIKE, an elite personal AI advisor inside MIKE OS.
-You specialize in: market education, web research, deep strategy, and life optimization.
-User: Ankith RV, 3rd year EEE student at NITK, developer, and founder.
-Style: Teach like a mentor. Be direct and intelligent. Never say you're an AI. You are MIKE.`;
-
-  // Inject Live Search Context
-  if (context.searchData) {
-    systemContent += `\n\nLIVE WEB SEARCH RESULTS:\n${context.searchData}\nUse this real-time information to answer the user accurately. Cite the news briefly.`;
-  }
-
-  // Inject Stock Context
-  if (context.stockData) {
-    systemContent += `\n\nREAL-TIME STOCK DATA:\nSymbol: ${context.stockData.symbol}\nPrice: $${context.stockData.price}\nChange Today: ${context.stockData.change}%`;
-  }
-
-  const messages = [
-    { role: "system", content: systemContent },
-    ...conversationHistory.slice(-6),
-    { role: "user", content: input }
-  ];
-  
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages,
-    max_tokens: 1024,
-    temperature: 0.7,
-  });
-  return completion.choices[0]?.message?.content || "Let me think about that.";
+async function askGemini(input, conversationHistory = []) {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const historyText = conversationHistory.slice(-6).map(m => `${m.role === 'user' ? 'Ankith' : 'MIKE'}: ${m.content}`).join('\n');
+  const fullPrompt = `${getSystemPrompt()}\n\nHistory:\n${historyText}\nAnkith: ${input}\nMIKE:`;
+  const result = await model.generateContent(fullPrompt);
+  return result.response.text();
 }
 
-// ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
-// Replace your processMessage function with this Triple-Brain logic
-async function processMessage(input, conversationHistory = []) {
-  const complex = isComplexQuery(input);
-  let stockData = null;
-
-  if (complex) {
-    const symbol = extractStockSymbol(input);
-    if (symbol) stockData = await getStockData(symbol);
-
-    try {
-      // Brain 1: Try Gemini First (Deep Thinking / Real-time)
-      const response = await askGemini(input, conversationHistory, { stockData });
-      return { response, brain: 'gemini', stockData };
-    } catch (geminiError) {
-      console.error("Gemini failed/rate-limited, falling back to High-IQ Fallback...", geminiError.message);
-      
-      try {
-        // Brain 2: Fallback to Groq 70B or Mistral 
-        // (Assuming askGroqPro is your 70B/Mistral fallback function)
-        const response = await askGroqPro(input, conversationHistory, { stockData });
-        return { response, brain: 'mistral-fallback', stockData };
-      } catch (fallbackError) {
-        return { response: "System overloaded. Both deep cores are currently offline.", brain: 'error', stockData: null };
-      }
+async function processMessage(rawInput, conversationHistory = []) {
+  const { useGemini, cleanInput } = routeBrain(rawInput);
+  let rawResponse;
+  try {
+    if (useGemini) {
+      rawResponse = await askGemini(cleanInput, conversationHistory);
+    } else {
+      rawResponse = await askGroq(cleanInput, conversationHistory);
     }
-  } else {
-    // Brain 3: Groq 8B (Lightning fast reflexes for simple tasks)
-    const response = await askGroq(input, conversationHistory);
-    return { response, brain: 'groq-fast', stockData: null };
+  } catch (e) {
+    return { response: "⚠️ Brain Link Failed.", brain: "system" };
   }
+
+  let finalResponse = rawResponse;
+
+  try {
+    // 1. Projects
+    const projMatch = rawResponse.match(/\[ADD_PROJECT:\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\]/);
+    if (projMatch) {
+      const db = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8') || '{"tasks":[]}');
+      if (!db.tasks) db.tasks = [];
+      db.tasks.push({ id: Date.now().toString(), title: projMatch[1].trim(), desc: projMatch[2].trim(), status: 'To Do', priority: projMatch[3].trim() });
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(db, null, 2));
+      finalResponse = finalResponse.replace(projMatch[0], '').trim();
+    }
+
+    const moveMatch = rawResponse.match(/\[MOVE_PROJECT:\s*(.*?)\s*\|\s*(.*?)\]/);
+    if (moveMatch) {
+      const title = moveMatch[1].toLowerCase(); const newStatus = moveMatch[2];
+      const db = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8') || '{"tasks":[]}');
+      db.tasks = db.tasks.map(t => t.title.toLowerCase().includes(title) ? { ...t, status: newStatus } : t);
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(db, null, 2));
+      finalResponse = finalResponse.replace(moveMatch[0], '').trim();
+    }
+
+    // 2. Performance Logs (Time)
+    const perfMatch = rawResponse.match(/\[ADD_PERFORMANCE:\s*(.*?)\s*\|\s*([\d.]+)\]/);
+    if (perfMatch) {
+      const perf = JSON.parse(fs.readFileSync(PERFORMANCE_FILE, 'utf-8') || '{"logs":[], "vitals": {}, "habits": []}');
+      if (!perf.logs) perf.logs = [];
+      perf.logs.push({ id: Date.now().toString(), date: new Date().toISOString().split('T')[0], category: perfMatch[1].trim(), hours: parseFloat(perfMatch[2]) });
+      fs.writeFileSync(PERFORMANCE_FILE, JSON.stringify(perf, null, 2));
+      finalResponse = finalResponse.replace(perfMatch[0], '').trim();
+    }
+
+    // 3. Calendar
+    const calMatch = rawResponse.match(/\[ADD_CALENDAR:\s*(\d+)\s*\|\s*(.*?)\]/);
+    if (calMatch) {
+      const day = parseInt(calMatch[1]);
+      const cal = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf-8') || '{}');
+      if (!cal[day]) cal[day] = { tasks: [], meetings: [], notes: "", progress: 0 };
+      cal[day].tasks.push({ id: Date.now().toString(), title: calMatch[2].trim(), status: 'pending' });
+      fs.writeFileSync(CALENDAR_FILE, JSON.stringify(cal, null, 2));
+      finalResponse = finalResponse.replace(calMatch[0], '').trim();
+    }
+
+    // 4. Finance
+    const expMatch = rawResponse.match(/\[ADD_EXPENSE:\s*(\d+)\s*\|\s*(.*?)\]/);
+    if (expMatch) {
+      const fin = JSON.parse(fs.readFileSync(FINANCE_FILE, 'utf-8') || '{"income":[],"expenses":[]}');
+      if (!fin.expenses) fin.expenses = [];
+      fin.expenses.push({ id: Date.now().toString(), category: expMatch[2].trim(), amount: parseInt(expMatch[1]), color: '#ef4444' });
+      fs.writeFileSync(FINANCE_FILE, JSON.stringify(fin, null, 2));
+      finalResponse = finalResponse.replace(expMatch[0], '').trim();
+    }
+
+    // 5. Vitals Update
+    const vitalMatch = rawResponse.match(/\[UPDATE_VITAL:\s*(.*?)\s*\|\s*([\d.]+)\]/);
+    if (vitalMatch) {
+      const metric = vitalMatch[1].trim().toLowerCase();
+      const val = parseFloat(vitalMatch[2]);
+      const perf = JSON.parse(fs.readFileSync(PERFORMANCE_FILE, 'utf-8') || '{"logs":[], "vitals": {}, "habits": []}');
+      if (!perf.vitals) perf.vitals = {};
+      perf.vitals[metric] = val;
+      fs.writeFileSync(PERFORMANCE_FILE, JSON.stringify(perf, null, 2));
+      finalResponse = finalResponse.replace(vitalMatch[0], '').trim();
+    }
+
+    // 6. Habit Toggle
+    const habitMatch = rawResponse.match(/\[TOGGLE_HABIT:\s*(.*?)\]/);
+    if (habitMatch) {
+      const habitName = habitMatch[1].trim().toLowerCase();
+      const perf = JSON.parse(fs.readFileSync(PERFORMANCE_FILE, 'utf-8') || '{"logs":[], "vitals": {}, "habits": []}');
+      if (perf.habits) {
+        perf.habits = perf.habits.map(h => h.task.toLowerCase().includes(habitName) ? { ...h, done: !h.done } : h);
+        fs.writeFileSync(PERFORMANCE_FILE, JSON.stringify(perf, null, 2));
+      }
+      finalResponse = finalResponse.replace(habitMatch[0], '').trim();
+    }
+
+  } catch (err) {
+    console.error("Database Write Error:", err);
+  }
+
+  return { response: finalResponse, brain: useGemini ? 'gemini' : 'groq' };
 }
+
 module.exports = { processMessage };

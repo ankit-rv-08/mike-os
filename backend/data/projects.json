@@ -1,0 +1,32 @@
+{
+  "tasks": [
+    {
+      "id": "p1",
+      "title": "MIKE OS System Integration",
+      "desc": "Finalizing the connection between AI brain and local JSON databases.",
+      "status": "In Progress",
+      "priority": "High"
+    },
+    {
+      "id": "p2",
+      "title": "HUDRA API Optimization",
+      "desc": "Reviewing backend performance for the task marketplace.",
+      "status": "To Do",
+      "priority": "Medium"
+    },
+    {
+      "id": "1778513101957",
+      "title": "ship HUDRA Saas",
+      "desc": "Manual system entry.",
+      "status": "In Progress",
+      "priority": "Medium"
+    },
+    {
+      "id": "1778513707830",
+      "title": "Mike OS Setup",
+      "desc": "Complete the setup of Mike OS to ensure seamless integration and functionality",
+      "status": "To Do",
+      "priority": "Priority: High"
+    }
+  ]
+}

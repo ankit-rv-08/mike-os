@@ -1,34 +1,19 @@
-[
-  {
-    "id": 1778436952763,
-    "title": "add a meeting with yale toda",
-    "type": "calendar",
-    "status": "completed",
-    "start_time": "2026-05-10T18:15:52.763Z",
-    "completed": true
-  },
-  {
-    "id": 1778436985154,
-    "title": "task: gym at 7pm",
-    "type": "task",
-    "status": "completed",
-    "start_time": "2026-05-10T18:16:25.154Z",
-    "completed": true
-  },
-  {
-    "id": 1778438193256,
-    "title": "task: meeting at 10",
-    "type": "task",
-    "status": "completed",
-    "start_time": "2026-05-10T18:36:33.256Z",
-    "completed": true
-  },
-  {
-    "id": 1778438209745,
-    "title": "event: date with mom",
-    "type": "calendar",
-    "status": "pending",
-    "start_time": "2026-05-10T18:36:49.745Z",
-    "completed": false
+{
+  "11": {
+    "tasks": [
+      {
+        "id": "1778490300151",
+        "title": "meeting with tom at 6pm",
+        "status": "pending"
+      },
+      {
+        "id": "1778490858661",
+        "title": "date with mom",
+        "status": "completed"
+      }
+    ],
+    "meetings": [],
+    "notes": "",
+    "progress": 50
   }
-]
+}
