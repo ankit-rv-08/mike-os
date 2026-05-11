@@ -1,44 +1,76 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require('cors');
+const express = require('express');
+const cors = require('cors'); // Declared ONLY ONCE here
 const path = require('path');
 const fs = require('fs');
-const commandRoutes = require("./routes/command-routes");
+require('dotenv').config();
+
+const { processMessage } = require('./services/ai-service');
 
 const app = express();
+const PORT = process.env.PORT || 8787;
 
+// --- Middlewares ---
+app.use(express.json());
 
-// Allow both your local environment and your live Vercel site
-app.use(cors({S
+// Dynamic CORS configuration for your Vercel deployment
+app.use(cors({
     origin: [
-        'http://localhost:3000', 
-        'https://mike-os-frontend.vercel.app' // ADD YOUR EXACT VERCEL URL HERE
+        'http://localhost:3000',
+        'https://mike-os-frontend.vercel.app' // Your live frontend
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
-app.use(express.json());
 
-// Ensure data directory exists
 const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, status: "online", system: "MIKE OS v2.0" });
+// --- Generic Helper for JSON DBs ---
+const getDB = (file) => {
+    const p = path.join(DATA_DIR, file);
+    if (!fs.existsSync(p)) return {};
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+};
+
+const saveDB = (file, data) => {
+    fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
+};
+
+// --- ROUTES ---
+
+// Chat Route
+app.post('/api/chat', async (req, res) => {
+    const { message, history } = req.body;
+    const result = await processMessage(message, history);
+    res.json(result);
 });
 
-// All API logic goes to the router!
-app.use("/api", commandRoutes);
+// Performance (Vitals/Habits)
+app.get('/api/performance', (req, res) => res.json(getDB('performance.json')));
+app.post('/api/performance', (req, res) => {
+    saveDB('performance.json', req.body);
+    res.json({ success: true });
+});
 
-module.exports = app;
+// Projects (Execution)
+app.get('/api/projects', (req, res) => res.json(getDB('projects.json')));
+app.post('/api/projects', (req, res) => {
+    saveDB('projects.json', req.body);
+    res.json({ success: true });
+});
 
-if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.BACKEND_PORT || 8787;
-  app.listen(PORT, () => {
-    console.log(`
-    ⚡ MIKE OS BACKEND ONLINE
-    📡 URL: http://localhost:${PORT}
-    🧠 MODE: Dual-Brain (Groq/Gemini)
-    `);
-  });
-}
+// Finance (Capital)
+app.get('/api/finance', (req, res) => res.json(getDB('finance.json')));
+app.post('/api/finance', (req, res) => {
+    saveDB('finance.json', req.body);
+    res.json({ success: true });
+});
+
+// Calendar
+app.get('/api/calendar', (req, res) => res.json(getDB('calendar.json')));
+app.post('/api/calendar', (req, res) => {
+    saveDB('calendar.json', req.body);
+    res.json({ success: true });
+});
+
+app.listen(PORT, () => console.log(`MIKE OS Backend Active on Port ${PORT}`));
