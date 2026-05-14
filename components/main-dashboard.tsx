@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Clock, Activity, Cpu, ArrowUpRight, Target, Layout, Brain, TrendingUp, Lock, CheckCircle2, Terminal, Bell, MessageSquare, HelpCircle, Settings, Github, Linkedin, Instagram, Mail } from 'lucide-react'
 import { ChatCard } from './cards/chat-card'
 
@@ -18,6 +19,9 @@ import { NeuralView } from './views/neural-view'
 import { useTheme } from './theme-provider'
 import type { ThemeMode } from './theme-provider'
 
+// Import Career Context
+import { useCareer } from '@/lib/career-context'
+
 interface MainDashboardProps {
   activeNav: string
 }
@@ -25,6 +29,9 @@ interface MainDashboardProps {
 export function MainDashboard({ activeNav }: MainDashboardProps) {
   // Directly grab Theme Context instead of passing props
   const { mode, setMode } = useTheme()
+  
+  // Grab Career Context for Career Health widget
+  const { careerFocusTime, toggleCareerCommand } = useCareer()
   
   const [mounted, setMounted] = useState(false)
   const [lifeScore, setLifeScore] = useState(88)
@@ -199,6 +206,43 @@ export function MainDashboard({ activeNav }: MainDashboardProps) {
                   <MiniBarChart data={[40, 60, 30, 80, 50, 90, 70]} />
                   <div className="flex justify-between text-[8px] opacity-60 uppercase mt-1">
                     <span>Sun</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Career Health Widget */}
+              <div 
+                onClick={toggleCareerCommand}
+                className={`${theme.bg} border border-indigo-500/30 p-5 rounded-2xl shadow-xl transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:border-indigo-500/50`}
+              >
+                <h3 className="text-xs font-bold opacity-60 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <Target size={14} className="text-indigo-500" /> CAREER HEALTH
+                </h3>
+                <div className="flex items-center justify-between bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20 mb-4">
+                   <div className="space-y-1">
+                     <div className="text-[10px] opacity-80 flex items-center gap-1 text-indigo-400">
+                       <Clock size={10} /> Today's Focus
+                     </div>
+                   </div>
+                   <div className="text-2xl font-bold text-indigo-400">
+                     {Math.floor(careerFocusTime / 60)}h {careerFocusTime % 60}m
+                   </div>
+                </div>
+                <div>
+                  <div className="text-[10px] opacity-60 uppercase flex justify-between mb-2">
+                    <span>Daily Goal Progress</span>
+                    <span className="text-indigo-400">{Math.min(Math.round((careerFocusTime / 300) * 100), 100)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min((careerFocusTime / 300) * 100, 100)}%` }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </div>
+                  <div className="text-[8px] opacity-60 uppercase mt-2 text-center">
+                    Click to open Career Command
                   </div>
                 </div>
               </div>
